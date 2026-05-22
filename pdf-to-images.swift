@@ -76,6 +76,16 @@ func parseArguments(_ argv: [String]) -> Result<Arguments, ParseError> {
 let renderDPI: CGFloat = 144.0
 let jpegQuality: CGFloat = 0.85
 
+/// One explicit sRGB color space shared by every render context and fill color.
+/// Using a single space end-to-end avoids color-space conversion, which would
+/// otherwise shift vivid colors (pure red would rasterize as 255,38,0).
+let sRGBColorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+
+/// Build an opaque sRGB color. Components are sRGB R,G,B in 0...1.
+func sRGBColor(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> CGColor {
+    return CGColor(colorSpace: sRGBColorSpace, components: [r, g, b, 1])!
+}
+
 /// Render a single PDF page to a CGImage at renderDPI on a white background.
 func renderPage(_ page: PDFPage) -> CGImage? {
     let bounds = page.bounds(for: .mediaBox)
@@ -84,7 +94,7 @@ func renderPage(_ page: PDFPage) -> CGImage? {
     let pixelHeight = Int((bounds.height * scale).rounded())
     guard pixelWidth > 0, pixelHeight > 0 else { return nil }
 
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let colorSpace = sRGBColorSpace
     guard let ctx = CGContext(
         data: nil,
         width: pixelWidth,
@@ -95,7 +105,7 @@ func renderPage(_ page: PDFPage) -> CGImage? {
         bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
     ) else { return nil }
 
-    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    ctx.setFillColor(sRGBColor(1, 1, 1))
     ctx.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
     ctx.scaleBy(x: scale, y: scale)
     ctx.translateBy(x: -bounds.origin.x, y: -bounds.origin.y)
@@ -146,7 +156,7 @@ func buildMontage(pageImages: [CGImage]) -> CGImage? {
     let canvasW = Int(cellW * CGFloat(cols) + montageSeparator)
     let canvasH = Int(cellH * CGFloat(rows) + montageSeparator)
 
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let colorSpace = sRGBColorSpace
     guard let ctx = CGContext(
         data: nil, width: canvasW, height: canvasH,
         bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
@@ -154,7 +164,7 @@ func buildMontage(pageImages: [CGImage]) -> CGImage? {
     ) else { return nil }
 
     // Gray separator background, then white cells.
-    ctx.setFillColor(CGColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1))
+    ctx.setFillColor(sRGBColor(0.8, 0.8, 0.8))
     ctx.fill(CGRect(x: 0, y: 0, width: canvasW, height: canvasH))
 
     for (index, image) in pageImages.enumerated() {
@@ -163,7 +173,7 @@ func buildMontage(pageImages: [CGImage]) -> CGImage? {
         // CoreGraphics origin is bottom-left; lay rows out top-to-bottom.
         let cellX = montageSeparator + CGFloat(col) * cellW
         let cellY = CGFloat(canvasH) - cellH - CGFloat(row) * cellH
-        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.setFillColor(sRGBColor(1, 1, 1))
         ctx.fill(CGRect(x: cellX, y: cellY + montageSeparator,
                         width: montageThumbWidth, height: cellHeight))
         let size = scaledSizes[index]

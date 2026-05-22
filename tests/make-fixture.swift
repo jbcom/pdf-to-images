@@ -8,12 +8,18 @@ import UniformTypeIdentifiers
 // Usage: swift tests/make-fixture.swift <output.pdf> [pageCount]
 // Default pageCount = 5 -> red, green, blue, yellow, magenta.
 
+// One explicit sRGB color space; colors built in it so no conversion occurs
+// when filled into the PDF context (keeps the fixture pixel-exact).
+let sRGB = CGColorSpace(name: CGColorSpace.sRGB)!
+func srgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> CGColor {
+    return CGColor(colorSpace: sRGB, components: [r, g, b, 1])!
+}
 let fills: [(name: String, color: CGColor)] = [
-    ("red",     CGColor(red: 1, green: 0, blue: 0, alpha: 1)),
-    ("green",   CGColor(red: 0, green: 1, blue: 0, alpha: 1)),
-    ("blue",    CGColor(red: 0, green: 0, blue: 1, alpha: 1)),
-    ("yellow",  CGColor(red: 1, green: 1, blue: 0, alpha: 1)),
-    ("magenta", CGColor(red: 1, green: 0, blue: 1, alpha: 1)),
+    ("red",     srgb(1, 0, 0)),
+    ("green",   srgb(0, 1, 0)),
+    ("blue",    srgb(0, 0, 1)),
+    ("yellow",  srgb(1, 1, 0)),
+    ("magenta", srgb(1, 0, 1)),
 ]
 
 let argv = Array(CommandLine.arguments.dropFirst())
