@@ -108,18 +108,32 @@ Case-insensitive extension handling: strip the extension via path APIs
 ### Wrappers
 
 Four wrappers — an Automator workflow and a Shortcut for each of jpg and png.
-Each locates `pdf-to-images.swift` relative to itself and runs
-`swift <script> --format <jpg|png> "$@"`, with the format hard-pinned per
-wrapper. A user who downloads a release artifact just double-clicks to install —
-no repo clone needed.
+The format is hard-pinned per wrapper. A user who downloads a release artifact
+just double-clicks to install — no repo clone needed. Both wrapper *kinds* carry
+the engine, but they carry it differently because their file shapes differ:
 
-- **`Convert PDF to JPG.workflow` / `Convert PDF to PNG.workflow`** — the Run
-  Shell Script action; `COMMAND_STRING` is the dispatcher with its `--format`
-  fixed. The engine script is bundled inside each `Contents/` so the workflow is
-  self-contained.
-- **`Convert PDF to JPG.shortcut` / `Convert PDF to PNG.shortcut`** — Quick
-  Actions (Finder, receive PDF files) with a Run Shell Script action calling the
-  same engine. Built and validated via the `shortcuts-playground` skill.
+- **`Convert PDF to JPG.workflow` / `Convert PDF to PNG.workflow`** — a
+  `.workflow` is a *bundle* (a directory). The Run Shell Script action's
+  `COMMAND_STRING` is a small dispatcher with its `--format` fixed; the engine
+  `pdf-to-images.swift` is copied into the bundle's `Contents/`, and the
+  dispatcher locates it as a sibling via `${0:A:h}`.
+- **`Convert PDF to JPG.shortcut` / `Convert PDF to PNG.shortcut`** — a
+  `.shortcut` is a *single signed file*, so it cannot carry a sibling engine
+  file. Instead the Shortcut's Run Shell Script action **embeds the full engine
+  source**: at run time it writes `pdf-to-images.swift` to a temp file, runs it,
+  and cleans up. This keeps the Shortcut self-contained — download, double-click,
+  done — exactly like the bundled `.workflow`.
+
+  **Single source of truth:** the embedded copy is *not* hand-maintained.
+  `build-wrappers.sh` generates the Shortcut's shell body by splicing the current
+  `pdf-to-images.swift` into the dispatcher at build time, the same way it
+  splices the dispatcher into the `.workflow` plist. The engine has exactly one
+  authored copy; every wrapper is regenerated from it.
+
+  *Decision:* embed the engine in the Shortcut (vs. a fixed install path).
+  *Why:* a fixed path would need a separate engine-install step, breaking the
+  one-double-click install goal; embedding keeps the Shortcut self-contained and
+  consistent with the `.workflow`.
 
 The dispatcher body is identical across all four except the literal `jpg`/`png`
 — generated from one template at build time so the four stay in lockstep.
