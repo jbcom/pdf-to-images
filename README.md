@@ -1,51 +1,69 @@
-# Convert PDF to JPG Automator Workflow
+# pdf-to-images
 
-This Mac Automator workflow makes it super easy to convert PDF files to JPG images. Give it a try and keep your files safe!
+Convert **every page** of a PDF into JPG or PNG images — plus a montage of all
+pages — straight from the macOS Finder. Local, private, zero dependencies.
 
-Only works for single-page PDFs!
+This project began as a fork of
+[sanjeed5/convert_pdf_to_jpg_on_mac](https://github.com/sanjeed5/convert_pdf_to_jpg_on_mac);
+thanks to the original author for the starting point.
 
+## What it does
 
-![Add a quick action](thumbnail.png)
+Right-click a PDF in Finder → **Quick Actions** → **Convert PDF to JPG**
+(or **PNG**). For `Report.pdf`, the JPG action gives you (the PNG action
+produces the same layout with `.png` files):
 
-## How To Install
+- `Report_pages/` — `page-001.jpg`, `page-002.jpg`, … one image per page.
+- `Report_montage.jpg` — a near-square grid of every page (skipped for
+  single-page PDFs).
 
-1. **Download and Unzip:**  
-   - Download the folder from [here](https://github.com/sanjeed5/convert_pdf_to_jpg_on_mac/archive/refs/heads/main.zip) or click the green button "Code" and then "Download ZIP".
-     - ![Download Zip instructions](download_zip.png)
-   - Double click the downloaded file and unzip it.
+Rendering is 144 DPI; JPG uses quality 0.85; PNG is lossless.
 
-2. **Install the Workflow:**  
-   - Simply double-click the unzipped folder. Your Mac will prompt you to install the workflow automatically.
+## Install
 
-3. **Using the Workflow:**  
-   - Open Finder and right-click (or Control-click) on any PDF file.
-   - Select the **"Convert PDF to JPG"** service from the Quick Actions menu.
-   - The workflow will convert the PDF file into a JPG image and save it in the same directory.
+Download the action you want from the
+[latest release](https://github.com/jbcom/pdf-to-images/releases/latest):
 
-## What's Inside?
+| File | Installs into |
+|---|---|
+| `Convert-PDF-to-JPG.workflow.zip` | Automator Quick Action (JPG) |
+| `Convert-PDF-to-PNG.workflow.zip` | Automator Quick Action (PNG) |
+| `Convert-PDF-to-JPG.shortcut.zip` | Shortcuts Quick Action (JPG) |
+| `Convert-PDF-to-PNG.shortcut.zip` | Shortcuts Quick Action (PNG) |
 
-- **Convert PDF to JPG.workflow:**  
-  Contains the Automator workflow that runs a shell script. This script leverages macOS’s built-in `sips` tool to convert your PDFs to JPGs.
+Unzip and double-click the `.workflow` or `.shortcut` to install it. macOS adds
+it to the Quick Actions menu in Finder.
+
+Apple is phasing Automator out in favor of Shortcuts — the `.shortcut` versions
+are the forward-looking choice; the `.workflow` versions remain for older macOS.
 
 ## Requirements
 
-- **macOS:** This workflow works on modern versions of macOS (tested on macOS Catalina and later).
-- **Automator & sips Tool:** Both come pre-installed with macOS.
+- macOS (modern versions).
+- The Xcode Command Line Tools. If they are missing, the first run shows the
+  standard macOS "install developer tools" prompt — click Install and run the
+  action again. **No Homebrew, no other downloads.**
 
-## Troubleshooting
+## How it works
 
-- If the service doesn't appear immediately after installation, try restarting Finder or logging out and back in.
+A single Swift script, `pdf-to-images.swift`, uses Apple's PDFKit and
+CoreGraphics to render and montage pages. Each Quick Action is a thin wrapper
+that calls it with a fixed `--format`. The engine has no platform-specific
+dependencies, so Linux file-manager integrations are a natural future addition.
 
-## Contributing
+## Development
 
-Contributions are welcome! If you have ideas to improve the workflow or find any issues, please:
-- Fork the repository.
-- Create a feature branch.
-- Commit your changes.
-- Submit a pull request.
+```bash
+# Run the engine directly
+swift pdf-to-images.swift --format png path/to/file.pdf
+
+# Rebuild the Automator wrappers from the template + engine
+./build-wrappers.sh
+
+# Run the integration test
+./tests/run-integration-test.sh
+```
 
 ## License
 
-This project is open-sourced under the [MIT License](LICENSE).
-
-Happy converting!
+[MIT](LICENSE). Original work © sanjeed5; modifications © Jon Bogaty.

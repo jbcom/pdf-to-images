@@ -1,0 +1,71 @@
+name: Deploy Release Artifacts
+
+# Fires when release-please publishes a GitHub Release (its release PR merged).
+# Using the `release` event binds the artifacts to the exact tag of the release
+# that triggered the run — no "latest release" ambiguity.
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach wrappers to
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cd-${{ github.event.release.tag_name || github.event.inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  attach-artifacts:
+    name: Zip and attach wrappers
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Resolve release tag
+        id: rel
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            echo "error: no release tag available" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build wrappers
+        run: ./build-wrappers.sh
+
+      - name: Zip wrappers
+        run: |
+          mkdir -p dist
+          count=0
+          for name in "Convert PDF to JPG.workflow" "Convert PDF to PNG.workflow" \
+                      "Convert PDF to JPG.shortcut" "Convert PDF to PNG.shortcut"; do
+            if [ ! -e "$name" ]; then
+              echo "skipping missing wrapper: $name"
+              continue
+            fi
+            ditto -c -k --sequesterRsrc --keepParent "$name" "dist/${name// /-}.zip"
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "error: no wrappers found to attach" >&2
+            exit 1
+          fi
+          ls -l dist
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          files: dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

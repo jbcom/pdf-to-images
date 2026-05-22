@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Integration test for pdf-to-images.swift and the Quick Action wrappers.
+# Generates a 5-page primary-color PDF, runs the engine in both formats,
+# asserts page count / per-page fill colors / montage geometry, then verifies
+# the wrappers run headless-safe (no blocking modal dialog).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENGINE="$REPO_ROOT/pdf-to-images.swift"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# Expected fills, page order: red green blue yellow magenta.
+EXPECTED_RGB=("255 0 0" "0 255 0" "0 0 255" "255 255 0" "255 0 255")
+
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# Color comparison with per-channel tolerance.
+rgb_matches() {
+  # args: "r g b" "r g b" tolerance
+  local a=($1) b=($2) tol=$3
+  for i in 0 1 2; do
+    local d=$(( ${a[$i]} - ${b[$i]} ))
+    d=${d#-}
+    (( d > tol )) && return 1
+  done
+  return 0
+}
+
+for FORMAT in jpg png; do
+  echo "=== format: $FORMAT ==="
+  PDF="$WORK/sample_$FORMAT.pdf"
+  swift "$REPO_ROOT/tests/make-fixture.swift" "$PDF" 5 >/dev/null
+  swift "$ENGINE" --format "$FORMAT" "$PDF" >/dev/null
+
+  PAGES_DIR="$WORK/sample_${FORMAT}_pages"
+  [ -d "$PAGES_DIR" ] || fail "$FORMAT: pages dir missing"
+
+  # PNG is lossless -> tolerance 0; JPG -> small tolerance.
+  if [ "$FORMAT" = png ]; then TOL=0; else TOL=24; fi
+
+  for n in 1 2 3 4 5; do
+    PAGE="$PAGES_DIR/page-$n.$FORMAT"
+    [ -f "$PAGE" ] || fail "$FORMAT: $PAGE missing"
+    GOT=$(swift "$REPO_ROOT/tests/check-pixels.swift" "$PAGE" | cut -d' ' -f2-)
+    WANT="${EXPECTED_RGB[$((n-1))]}"
+    rgb_matches "$GOT" "$WANT" "$TOL" \
+      || fail "$FORMAT: page $n fill = ($GOT), expected ($WANT)"
+    echo "  page $n fill ok ($GOT)"
+  done
+
+  MONTAGE="$WORK/sample_${FORMAT}_montage.$FORMAT"
+  [ -f "$MONTAGE" ] || fail "$FORMAT: montage missing"
+  # 5 pages -> cols=ceil(sqrt(5))=3, rows=ceil(5/3)=2. Sample cell (row0,col0)
+  # center -> page 1 (red). Fractional center of top-left cell ~ (0.167, 0.25).
+  CELL_RGB=$(swift "$REPO_ROOT/tests/check-pixels.swift" "$MONTAGE" 0.167 0.25 | cut -d' ' -f2-)
+  rgb_matches "$CELL_RGB" "255 0 0" "$TOL" \
+    || fail "$FORMAT: montage top-left cell = ($CELL_RGB), expected red"
+  echo "  montage top-left cell ok ($CELL_RGB)"
+done
+
+# --- Wrapper headless-safety -------------------------------------------------
+# A wrapper must NEVER open a blocking modal dialog: it has to run under agents
+# and CI without a human to dismiss a popup. Build the wrappers, then run the
+# generated Shortcut shell body headlessly (PDF_TO_IMAGES_QUIET=1) under a hard
+# timeout — if it ever reintroduced `display alert`, the run would hang and the
+# timeout would trip.
+echo "=== wrapper headless-safety ==="
+"$REPO_ROOT/build-wrappers.sh" >/dev/null
+
+# Bound a wrapper run so a reintroduced blocking dialog fails instead of hangs.
+# The watchdog polls in short steps and self-exits once the job finishes, so it
+# is never SIGKILL'd — no job-control noise in the test output.
+run_bounded() {
+  # run_bounded <seconds> <command...>
+  local limit="$1"; shift
+  "$@" &
+  local pid=$!
+  (
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null; do
+      if [ "$waited" -ge "$limit" ]; then
+        kill -9 "$pid" 2>/dev/null
+        break
+      fi
+      sleep 1
+      waited=$((waited + 1))
+    done
+  ) &
+  local killer=$!
+  local rc=0
+  wait "$pid" 2>/dev/null || rc=$?
+  wait "$killer" 2>/dev/null || true
+  return "$rc"
+}
+
+# A wrapper must NOT call osascript in quiet mode — assert by stubbing a fake
+# osascript on PATH that fails loudly if invoked.
+STUB_BIN="$WORK/stubbin"
+mkdir -p "$STUB_BIN"
+cat > "$STUB_BIN/osascript" <<'STUB'
+#!/bin/sh
+echo "FAIL: wrapper invoked osascript under PDF_TO_IMAGES_QUIET" >&2
+exit 99
+STUB
+chmod +x "$STUB_BIN/osascript"
+
+WRAP_OUT="$WORK/wrap.out"
+
+# Both the JPG and PNG Shortcut shell bodies must be headless-safe. They share
+# one template, but exercising both guards against a future template divergence.
+for WFMT in jpg png; do
+  SC="$REPO_ROOT/wrappers/shortcut-$WFMT.sh"
+  [ -f "$SC" ] || fail "wrapper: shortcut-$WFMT.sh not generated"
+
+  # Valid PDF, headless: must succeed, produce output, never call osascript.
+  HPDF="$WORK/headless_$WFMT.pdf"
+  swift "$REPO_ROOT/tests/make-fixture.swift" "$HPDF" 3 >/dev/null
+  if ! PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+       run_bounded 60 zsh "$SC" "$HPDF" >"$WRAP_OUT" 2>&1; then
+    cat "$WRAP_OUT" >&2
+    fail "$WFMT wrapper: headless valid-PDF run did not exit cleanly (hang or osascript call)"
+  fi
+  [ -f "$WORK/headless_${WFMT}_pages/page-3.$WFMT" ] \
+    || fail "$WFMT wrapper: headless run produced no page images"
+  echo "  $WFMT wrapper headless valid-PDF run ok (no dialog, no osascript)"
+
+  # Missing PDF, headless: must FAIL fast (non-zero) without hanging or osascript.
+  if PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+     run_bounded 60 zsh "$SC" "$WORK/does-not-exist.pdf" >"$WRAP_OUT" 2>&1; then
+    cat "$WRAP_OUT" >&2
+    fail "$WFMT wrapper: headless missing-PDF run unexpectedly succeeded"
+  fi
+  grep -q 'file not found' "$WRAP_OUT" \
+    || fail "$WFMT wrapper: missing-PDF error not surfaced to stderr"
+  echo "  $WFMT wrapper headless missing-PDF run ok (failed fast, no dialog)"
+done
+
+echo "ALL INTEGRATION TESTS PASSED"

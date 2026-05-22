@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck and integration test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Typecheck engine
+        run: swiftc -typecheck pdf-to-images.swift
+
+      - name: Typecheck test helpers
+        run: |
+          swiftc -typecheck tests/make-fixture.swift
+          swiftc -typecheck tests/check-pixels.swift
+
+      - name: Integration test
+        run: ./tests/run-integration-test.sh

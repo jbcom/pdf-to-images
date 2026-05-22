@@ -1,0 +1,58 @@
+#!/bin/zsh
+# pdf-to-images Shortcut dispatcher. The format and the engine source are
+# substituted at build time by build-wrappers.sh.
+#
+# A .shortcut is a single signed file, not a bundle, so it cannot carry a
+# sibling engine script. Instead the full engine source is embedded below and
+# written to a temp file at run time. Receives PDF file paths as positional
+# arguments from the Quick Action.
+#
+# Runs safely both interactively (Finder Quick Action) and non-interactively
+# (agents, CI, other scripts). It NEVER opens a blocking modal dialog: user
+# messaging goes through non-blocking notifications, and stderr always carries
+# the full text. Set PDF_TO_IMAGES_QUIET=1 to suppress notifications entirely.
+
+FORMAT="{{FORMAT}}"
+
+# notify <title> <message>
+# Always writes to stderr. Additionally posts a non-blocking macOS notification
+# unless PDF_TO_IMAGES_QUIET is set. Never blocks — no `display alert`.
+# The title/message are passed to osascript as `run` arguments, never
+# interpolated into the AppleScript source, so quotes in a filename or error
+# message cannot break the command.
+notify() {
+  print -r -- "$1: $2" >&2
+  [ -n "${PDF_TO_IMAGES_QUIET:-}" ] && return 0
+  osascript -e 'on run {t, m}' \
+            -e 'display notification m with title t' \
+            -e 'end run' \
+            -- "$1" "$2" >/dev/null 2>&1 || true
+}
+
+if ! /usr/bin/xcrun --find swift >/dev/null 2>&1; then
+  notify "PDF to ${FORMAT:u}" "Xcode developer tools required. Run this action again after macOS finishes installing them."
+  # Trigger the macOS "install developer tools" popup — only when interactive.
+  # Headless callers (PDF_TO_IMAGES_QUIET set) must not spawn an install GUI.
+  [ -z "${PDF_TO_IMAGES_QUIET:-}" ] && /usr/bin/swift --version >/dev/null 2>&1
+  exit 1
+fi
+
+# Write the embedded engine to a temp file, run it, clean up.
+ENGINE="$(/usr/bin/mktemp -t pdf-to-images).swift"
+trap 'rm -f "$ENGINE"' EXIT
+
+/bin/cat > "$ENGINE" <<'PDF_TO_IMAGES_ENGINE'
+{{ENGINE}}
+PDF_TO_IMAGES_ENGINE
+
+OUTPUT="$(/usr/bin/swift "$ENGINE" --format "$FORMAT" "$@" 2>&1)"
+STATUS=$?
+# Drop CoreGraphics' own CG_PDF_VERBOSE chatter from what we show the user.
+OUTPUT="$(printf '%s\n' "$OUTPUT" | /usr/bin/grep -v 'CG_PDF_VERBOSE' || true)"
+
+if [ $STATUS -eq 0 ]; then
+  notify "PDF to ${FORMAT:u}" "$OUTPUT"
+else
+  notify "PDF to ${FORMAT:u} failed" "$OUTPUT"
+fi
+exit $STATUS

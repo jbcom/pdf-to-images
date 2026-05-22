@@ -6,7 +6,7 @@
 	<array>
 		<dict>
 			<key>NSMenuItem</key>
-			<dict><key>default</key><string>Convert PDF to JPG</string></dict>
+			<dict><key>default</key><string>Convert PDF to PNG</string></dict>
 			<key>NSMessage</key><string>runWorkflowAsService</string>
 			<key>NSRequiredContext</key>
 			<dict><key>NSApplicationIdentifier</key><string>com.apple.finder</string></dict>
