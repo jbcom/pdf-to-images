@@ -68,8 +68,13 @@ PDF paths. Unknown format → error and non-zero exit before any work.
 
 Per PDF argument:
 
-1. Open with `PDFDocument` (PDFKit). If it fails or has 0 pages → print an
-   error to stderr, skip this PDF, continue with the rest.
+1. Open with `PDFDocument` (PDFKit). Before opening, the engine checks the path
+   so the error message names the *actual* problem instead of a generic "cannot
+   open": **file not found**, **not a file** (e.g. a directory), **not a valid
+   PDF**, or — after opening — **PDF has no pages**. Any of these → print the
+   specific error to stderr, skip this PDF, continue with the rest. This makes a
+   wrapper's failure alert actionable. The wrappers also filter CoreGraphics's
+   own `CG_PDF_VERBOSE` chatter out of the message they surface to the user.
 2. Create subdir `<PDFname>_pages/` beside the source PDF. **Overwrite cleanly**:
    if it exists, remove and recreate it so stale images never linger.
 3. Render every page to `page-001.<ext>`, `page-002.<ext>`, … (zero-padded to
