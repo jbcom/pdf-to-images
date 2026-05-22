@@ -99,6 +99,8 @@ func renderPage(_ page: PDFPage) -> CGImage? {
     ctx.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
     ctx.scaleBy(x: scale, y: scale)
     ctx.translateBy(x: -bounds.origin.x, y: -bounds.origin.y)
+    // PDFPage.draw(with:to:) maps PDF coordinate space into the context;
+    // no explicit Y-flip is needed — the API absorbs it.
     page.draw(with: .mediaBox, to: ctx)
     return ctx.makeImage()
 }
@@ -116,6 +118,64 @@ func writeImage(_ image: CGImage, to url: URL, format: OutputFormat) -> Bool {
     return CGImageDestinationFinalize(dest)
 }
 
+let montageThumbWidth: CGFloat = 400.0
+let montageSeparator: CGFloat = 4.0
+
+/// Build a near-square grid montage of the given page images.
+/// Returns the encoded montage CGImage, or nil on failure.
+func buildMontage(pageImages: [CGImage]) -> CGImage? {
+    let n = pageImages.count
+    guard n > 0 else { return nil }
+    let cols = Int(ceil(Double(n).squareRoot()))
+    let rows = Int(ceil(Double(n) / Double(cols)))
+
+    // Uniform cell: thumbWidth wide, height from the tallest scaled page.
+    var cellHeight: CGFloat = 0
+    var scaledSizes: [CGSize] = []
+    for image in pageImages {
+        let w = CGFloat(image.width)
+        let h = CGFloat(image.height)
+        let scale = montageThumbWidth / w
+        let size = CGSize(width: montageThumbWidth, height: (h * scale).rounded())
+        scaledSizes.append(size)
+        cellHeight = max(cellHeight, size.height)
+    }
+
+    let cellW = montageThumbWidth + montageSeparator
+    let cellH = cellHeight + montageSeparator
+    let canvasW = Int(cellW * CGFloat(cols) + montageSeparator)
+    let canvasH = Int(cellH * CGFloat(rows) + montageSeparator)
+
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let ctx = CGContext(
+        data: nil, width: canvasW, height: canvasH,
+        bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+    ) else { return nil }
+
+    // Gray separator background, then white cells.
+    ctx.setFillColor(CGColor(red: 0.8, green: 0.8, blue: 0.8, alpha: 1))
+    ctx.fill(CGRect(x: 0, y: 0, width: canvasW, height: canvasH))
+
+    for (index, image) in pageImages.enumerated() {
+        let col = index % cols
+        let row = index / cols
+        // CoreGraphics origin is bottom-left; lay rows out top-to-bottom.
+        let cellX = montageSeparator + CGFloat(col) * cellW
+        let cellY = CGFloat(canvasH) - cellH - CGFloat(row) * cellH
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: cellX, y: cellY + montageSeparator,
+                        width: montageThumbWidth, height: cellHeight))
+        let size = scaledSizes[index]
+        // Center the page within the uniform cell.
+        let drawX = cellX
+        let drawY = cellY + montageSeparator + (cellHeight - size.height) / 2
+        ctx.draw(image, in: CGRect(x: drawX, y: drawY,
+                                   width: size.width, height: size.height))
+    }
+    return ctx.makeImage()
+}
+
 // MARK: - Per-PDF processing
 
 struct PDFResult {
@@ -123,6 +183,7 @@ struct PDFResult {
     let pageCount: Int
     let pagesDir: URL
     let pageImages: [URL]
+    let montageURL: URL?
 }
 
 /// Process one PDF: render every page into <name>_pages/. Returns nil on failure.
@@ -168,7 +229,26 @@ func processPDF(at path: String, format: OutputFormat) -> PDFResult? {
     }
 
     guard !pageImages.isEmpty else { return nil }
-    return PDFResult(name: baseName, pageCount: pageImages.count, pagesDir: pagesDir, pageImages: pageImages)
+
+    // Montage: skip for single-page PDFs (it would just duplicate the page).
+    var montageURL: URL? = nil
+    if pageImages.count > 1 {
+        let cgImages = pageImages.compactMap { url -> CGImage? in
+            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+            return CGImageSourceCreateImageAtIndex(src, 0, nil)
+        }
+        if cgImages.count == pageImages.count, let montage = buildMontage(pageImages: cgImages) {
+            let url = parentDir.appendingPathComponent("\(baseName)_montage.\(format.fileExtension)")
+            if writeImage(montage, to: url, format: format) {
+                montageURL = url
+            } else {
+                FileHandle.standardError.write(Data("error: cannot write montage for '\(path)'\n".utf8))
+            }
+        }
+    }
+
+    return PDFResult(name: baseName, pageCount: pageImages.count,
+                     pagesDir: pagesDir, pageImages: pageImages, montageURL: montageURL)
 }
 
 // MARK: - Entry point
@@ -183,7 +263,8 @@ case .success(let args):
     for path in args.pdfPaths {
         guard let result = processPDF(at: path, format: args.format) else { continue }
         anySucceeded = true
-        print("\(result.name): \(result.pageCount) page(s) in \(result.pagesDir.lastPathComponent)")
+        let montageNote = result.montageURL != nil ? " + montage" : ""
+        print("\(result.name): \(result.pageCount) page(s) in \(result.pagesDir.lastPathComponent)\(montageNote)")
     }
     exit(anySucceeded ? 0 : 1)
 }
