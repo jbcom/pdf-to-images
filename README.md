@@ -3,9 +3,9 @@
 Convert **every page** of a PDF into JPG or PNG images — plus a montage of all
 pages — straight from the macOS Finder. Local, private, zero dependencies.
 
-This project began as a fork of
-[sanjeed5/convert_pdf_to_jpg_on_mac](https://github.com/sanjeed5/convert_pdf_to_jpg_on_mac);
-thanks to the original author for the starting point.
+[![CI](https://github.com/jbcom/pdf-to-images/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/pdf-to-images/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/jbcom/pdf-to-images)](https://github.com/jbcom/pdf-to-images/releases/latest)
 
 ## What it does
 
@@ -57,13 +57,34 @@ dependencies, so Linux file-manager integrations are a natural future addition.
 # Run the engine directly
 swift pdf-to-images.swift --format png path/to/file.pdf
 
-# Rebuild the Automator wrappers from the template + engine
+# Rebuild all four Quick Action wrappers from the engine + templates
 ./build-wrappers.sh
 
-# Run the integration test
+# Run the full integration test (engine + wrapper headless-safety)
 ./tests/run-integration-test.sh
 ```
 
+`pdf-to-images.swift` is the single source of truth; the wrappers are
+generated from it — never hand-edit a `.workflow` or `wrappers/shortcut-*.sh`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guidelines.
+
+## Contributing
+
+Issues and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first — the zero-dependency rule and the
+"edit the engine, not the wrappers" rule are important. This project follows the
+[Contributor Covenant](CODE_OF_CONDUCT.md). Security issues go through
+[private reporting](https://github.com/jbcom/pdf-to-images/security/advisories/new),
+not public issues.
+
+## Acknowledgements
+
+The idea started from
+[sanjeed5/convert_pdf_to_jpg_on_mac](https://github.com/sanjeed5/convert_pdf_to_jpg_on_mac),
+a single-page `sips` Quick Action. pdf-to-images is a full rewrite — a new Swift
+engine, every-page extraction, montage, and four wrappers — but thanks to the
+original author for the starting point.
+
 ## License
 
-[MIT](LICENSE). Original work © sanjeed5; modifications © Jon Bogaty.
+[MIT](LICENSE) © Jon Bogaty.
