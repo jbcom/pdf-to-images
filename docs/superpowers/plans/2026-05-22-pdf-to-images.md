@@ -131,7 +131,7 @@ case .success(let args):
 
 Run:
 ```bash
-swift -typecheck pdf-to-images.swift
+swiftc -typecheck pdf-to-images.swift
 swift pdf-to-images.swift --format png a.pdf b.pdf ; echo "exit=$?"
 swift pdf-to-images.swift --format bogus a.pdf ; echo "exit=$?"
 swift pdf-to-images.swift ; echo "exit=$?"
@@ -282,7 +282,7 @@ case .success(let args):
 
 - [ ] **Step 4: Verify it typechecks**
 
-Run: `swift -typecheck pdf-to-images.swift`
+Run: `swiftc -typecheck pdf-to-images.swift`
 Expected: silent, exit 0.
 
 - [ ] **Step 5: Commit**
@@ -421,7 +421,7 @@ Then in the entry point, replace the `print(...)` line with:
 
 - [ ] **Step 4: Verify it typechecks**
 
-Run: `swift -typecheck pdf-to-images.swift`
+Run: `swiftc -typecheck pdf-to-images.swift`
 Expected: silent, exit 0.
 
 - [ ] **Step 5: Commit**
@@ -1067,12 +1067,12 @@ jobs:
         run: swift --version
 
       - name: Typecheck engine
-        run: swift -typecheck pdf-to-images.swift
+        run: swiftc -typecheck pdf-to-images.swift
 
       - name: Typecheck test helpers
         run: |
-          swift -typecheck tests/make-fixture.swift
-          swift -typecheck tests/check-pixels.swift
+          swiftc -typecheck tests/make-fixture.swift
+          swiftc -typecheck tests/check-pixels.swift
 
       - name: Integration test
         run: ./tests/run-integration-test.sh
@@ -1365,7 +1365,7 @@ git commit -m "docs: MIT license and rewritten README for pdf-to-images"
 
 Run:
 ```bash
-swift -typecheck pdf-to-images.swift
+swiftc -typecheck pdf-to-images.swift
 ./tests/run-integration-test.sh
 ./build-wrappers.sh
 plutil -lint "Convert PDF to JPG.workflow/Contents/document.wflow"
