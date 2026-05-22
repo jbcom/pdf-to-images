@@ -1015,11 +1015,13 @@ only when the file contains a recognizable version. `version.txt` containing a
 bare `1.0.0` is updated automatically. No annotation comment is needed for a
 plain version file.
 
-Verify the JSON is valid:
+Verify the JSON is valid (`plutil -lint` only validates plists, not JSON —
+use a JSON parser):
 ```bash
-plutil -lint release-please-config.json .release-please-manifest.json
+python3 -c "import json; json.load(open('release-please-config.json')); print('config OK')"
+python3 -c "import json; json.load(open('.release-please-manifest.json')); print('manifest OK')"
 ```
-Expected: both `OK`.
+Expected: `config OK` and `manifest OK`.
 
 - [ ] **Step 5: Commit**
 
