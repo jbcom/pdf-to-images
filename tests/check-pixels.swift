@@ -32,7 +32,8 @@ guard let ctx = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8
     exit(1)
 }
 // Draw the image offset so the target pixel lands at (0,0) of the 1x1 context.
-let px = Int(Double(w) * fracX)
-let py = Int(Double(h) * fracY)
+// Clamp to the valid pixel range so fracX/fracY = 1.0 never samples off-image.
+let px = min(max(Int(Double(w) * fracX), 0), max(w - 1, 0))
+let py = min(max(Int(Double(h) * fracY), 0), max(h - 1, 0))
 ctx.draw(image, in: CGRect(x: -px, y: -(h - 1 - py), width: w, height: h))
 print("\(w)x\(h) \(pixel[0]) \(pixel[1]) \(pixel[2])")

@@ -227,10 +227,18 @@ func processPDF(at path: String, format: OutputFormat) -> PDFResult? {
     let parentDir = pdfURL.deletingLastPathComponent()
     let pagesDir = parentDir.appendingPathComponent("\(baseName)_pages", isDirectory: true)
 
-    // Overwrite cleanly: remove any existing subdir, recreate fresh.
-    try? FileManager.default.removeItem(at: pagesDir)
+    // Overwrite cleanly: remove any existing subdir, recreate fresh. A failed
+    // removal must not be ignored — leftover stale images would corrupt output.
+    if fm.fileExists(atPath: pagesDir.path) {
+        do {
+            try fm.removeItem(at: pagesDir)
+        } catch {
+            FileHandle.standardError.write(Data("error: cannot remove '\(pagesDir.path)': \(error)\n".utf8))
+            return nil
+        }
+    }
     do {
-        try FileManager.default.createDirectory(at: pagesDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: pagesDir, withIntermediateDirectories: true)
     } catch {
         FileHandle.standardError.write(Data("error: cannot create '\(pagesDir.path)': \(error)\n".utf8))
         return nil
@@ -238,36 +246,34 @@ func processPDF(at path: String, format: OutputFormat) -> PDFResult? {
 
     let padWidth = String(pageCount).count
     var pageImages: [URL] = []
+    // Keep the rendered CGImages so the montage reuses them directly instead of
+    // re-reading and re-decoding every page from disk.
+    var pageCGImages: [CGImage] = []
     for index in 0..<pageCount {
         guard let page = doc.page(at: index), let image = renderPage(page) else {
+            // "Render every page" is the contract — a single failure fails the
+            // whole PDF rather than silently producing an incomplete set.
             FileHandle.standardError.write(Data("error: cannot render page \(index + 1) of '\(path)'\n".utf8))
-            continue
+            return nil
         }
         let pageNumber = String(format: "%0\(padWidth)d", index + 1)
         let pageURL = pagesDir.appendingPathComponent("page-\(pageNumber).\(format.fileExtension)")
-        if writeImage(image, to: pageURL, format: format) {
-            pageImages.append(pageURL)
-        } else {
+        guard writeImage(image, to: pageURL, format: format) else {
             FileHandle.standardError.write(Data("error: cannot write '\(pageURL.path)'\n".utf8))
+            return nil
         }
+        pageImages.append(pageURL)
+        pageCGImages.append(image)
     }
-
-    guard !pageImages.isEmpty else { return nil }
 
     // Montage: skip for single-page PDFs (it would just duplicate the page).
     var montageURL: URL? = nil
-    if pageImages.count > 1 {
-        let cgImages = pageImages.compactMap { url -> CGImage? in
-            guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-            return CGImageSourceCreateImageAtIndex(src, 0, nil)
-        }
-        if cgImages.count == pageImages.count, let montage = buildMontage(pageImages: cgImages) {
-            let url = parentDir.appendingPathComponent("\(baseName)_montage.\(format.fileExtension)")
-            if writeImage(montage, to: url, format: format) {
-                montageURL = url
-            } else {
-                FileHandle.standardError.write(Data("error: cannot write montage for '\(path)'\n".utf8))
-            }
+    if pageCGImages.count > 1, let montage = buildMontage(pageImages: pageCGImages) {
+        let url = parentDir.appendingPathComponent("\(baseName)_montage.\(format.fileExtension)")
+        if writeImage(montage, to: url, format: format) {
+            montageURL = url
+        } else {
+            FileHandle.standardError.write(Data("error: cannot write montage for '\(path)'\n".utf8))
         }
     }
 

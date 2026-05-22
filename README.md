@@ -10,7 +10,8 @@ thanks to the original author for the starting point.
 ## What it does
 
 Right-click a PDF in Finder → **Quick Actions** → **Convert PDF to JPG**
-(or **PNG**). For `Report.pdf` you get:
+(or **PNG**). For `Report.pdf`, the JPG action gives you (the PNG action
+produces the same layout with `.png` files):
 
 - `Report_pages/` — `page-001.jpg`, `page-002.jpg`, … one image per page.
 - `Report_montage.jpg` — a near-square grid of every page (skipped for

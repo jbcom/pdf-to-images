@@ -1,51 +1,49 @@
 name: Deploy Release Artifacts
 
+# Fires when release-please publishes a GitHub Release (its release PR merged).
+# Using the `release` event binds the artifacts to the exact tag of the release
+# that triggered the run — no "latest release" ambiguity.
 on:
-  workflow_run:
-    workflows:
-      - Release
+  release:
     types:
-      - completed
-    branches:
-      - main
+      - published
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach wrappers to
+        required: true
 
 permissions:
   contents: write
 
 concurrency:
-  group: cd
+  group: cd-${{ github.event.release.tag_name || github.event.inputs.tag }}
   cancel-in-progress: false
 
 jobs:
   attach-artifacts:
     name: Zip and attach wrappers
     runs-on: macos-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-      - name: Resolve latest release tag
+      - name: Resolve release tag
         id: rel
         run: |
-          # On manual dispatch a release may not exist yet — exit cleanly
-          # instead of failing the run.
-          if ! TAG="$(gh release view --json tagName --jq .tagName 2>/dev/null)"; then
-            echo "no release found — nothing to attach artifacts to" >&2
-            echo "tag=" >> "$GITHUB_OUTPUT"
-            exit 0
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            echo "error: no release tag available" >&2
+            exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build wrappers
-        if: ${{ steps.rel.outputs.tag != '' }}
         run: ./build-wrappers.sh
 
       - name: Zip wrappers
-        if: ${{ steps.rel.outputs.tag != '' }}
         run: |
           mkdir -p dist
           count=0
@@ -65,7 +63,6 @@ jobs:
           ls -l dist
 
       - name: Attach to release
-        if: ${{ steps.rel.outputs.tag != '' }}
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ steps.rel.outputs.tag }}

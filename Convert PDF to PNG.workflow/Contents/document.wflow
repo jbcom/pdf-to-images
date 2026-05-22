@@ -45,10 +45,16 @@ FORMAT="png"
 # notify &lt;title&gt; &lt;message&gt;
 # Always writes to stderr. Additionally posts a non-blocking macOS notification
 # unless PDF_TO_IMAGES_QUIET is set. Never blocks — no `display alert`.
+# The title/message are passed to osascript as `run` arguments, never
+# interpolated into the AppleScript source, so quotes in a filename or error
+# message cannot break the command.
 notify() {
   print -r -- "$1: $2" &gt;&amp;2
   [ -n "${PDF_TO_IMAGES_QUIET:-}" ] &amp;&amp; return 0
-  osascript -e "display notification \"$2\" with title \"$1\"" &gt;/dev/null 2&gt;&amp;1 || true
+  osascript -e 'on run {t, m}' \
+            -e 'display notification m with title t' \
+            -e 'end run' \
+            -- "$1" "$2" &gt;/dev/null 2&gt;&amp;1 || true
 }
 
 # Locate the engine bundled next to this script.

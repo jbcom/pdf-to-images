@@ -27,7 +27,18 @@ guard let outPath = argv.first else {
     FileHandle.standardError.write(Data("usage: make-fixture.swift <output.pdf> [pageCount]\n".utf8))
     exit(2)
 }
-let pageCount = argv.count > 1 ? (Int(argv[1]) ?? 5) : 5
+// Validate pageCount explicitly — a non-numeric argument is an error, not a
+// silent fallback to the default.
+let pageCount: Int
+if argv.count > 1 {
+    guard let parsed = Int(argv[1]) else {
+        FileHandle.standardError.write(Data("pageCount must be an integer\n".utf8))
+        exit(2)
+    }
+    pageCount = parsed
+} else {
+    pageCount = 5
+}
 guard pageCount >= 1 && pageCount <= fills.count else {
     FileHandle.standardError.write(Data("pageCount must be 1...\(fills.count)\n".utf8))
     exit(2)
@@ -35,9 +46,9 @@ guard pageCount >= 1 && pageCount <= fills.count else {
 
 let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter at 72dpi
 var mediaBox = pageRect
-guard let ctx = CGContext(consumer: CGDataConsumer(url: URL(fileURLWithPath: outPath) as CFURL)!,
-                          mediaBox: &mediaBox, nil) else {
-    FileHandle.standardError.write(Data("cannot create PDF context\n".utf8))
+guard let consumer = CGDataConsumer(url: URL(fileURLWithPath: outPath) as CFURL),
+      let ctx = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+    FileHandle.standardError.write(Data("cannot create PDF context for '\(outPath)'\n".utf8))
     exit(1)
 }
 for i in 0..<pageCount {
