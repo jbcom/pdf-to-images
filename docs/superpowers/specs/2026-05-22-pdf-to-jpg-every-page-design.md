@@ -219,8 +219,8 @@ encode-step branch.
 | googleapis/release-please-action | `45996ed1f6d02564a971a2fa1b5860e934307cf7` | v5.0.0 |
 | softprops/action-gh-release | `b4309332981a82ec1c5618f44dd2e27cc8bfbfda` | v3.0.0 |
 
-(Additional actions, e.g. `actions/upload-artifact@043fb46d… v7.0.1`, pinned as
-needed during implementation, each resolved live from GitHub.)
+These three are the complete set the three workflows use — every `uses:` line
+is pinned to the commit SHA above, with the tag in a trailing comment.
 
 ## Repository changes
 

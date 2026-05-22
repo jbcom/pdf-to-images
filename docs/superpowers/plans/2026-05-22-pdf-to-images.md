@@ -1,6 +1,6 @@
 # pdf-to-images Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace the single-page `sips`-based Automator workflow with a portable Swift engine that renders every PDF page to JPG or PNG plus a montage, wrapped by four macOS Quick Actions, with release-please CI/CD.
 
@@ -53,7 +53,7 @@ The old `Convert PDF to JPG.workflow/` is overwritten in place (Task 8); the old
 - Create: `pdf-to-images.swift`
 - Test: `tests/run-integration-test.sh` (created later; arg parsing is checked manually here)
 
-- [ ] **Step 1: Write the engine skeleton with format parsing**
+- [x] **Step 1: Write the engine skeleton with format parsing**
 
 Create `pdf-to-images.swift`:
 
@@ -127,7 +127,7 @@ case .success(let args):
 }
 ```
 
-- [ ] **Step 2: Verify it typechecks and parses**
+- [x] **Step 2: Verify it typechecks and parses**
 
 Run:
 ```bash
@@ -138,7 +138,7 @@ swift pdf-to-images.swift ; echo "exit=$?"
 ```
 Expected: typecheck silent (exit 0); first run prints `parsed: format=png pdfs=2` exit=0; second prints `error: unknown format 'bogus' ...` exit=2; third prints `error: no PDF files given` exit=2.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pdf-to-images.swift
@@ -152,7 +152,7 @@ git commit -m "feat: pdf-to-images engine skeleton with --format parsing"
 **Files:**
 - Modify: `pdf-to-images.swift`
 
-- [ ] **Step 1: Add the page-rendering core**
+- [x] **Step 1: Add the page-rendering core**
 
 In `pdf-to-images.swift`, **above the `// MARK: - Entry point` section**, insert:
 
@@ -203,7 +203,7 @@ func writeImage(_ image: CGImage, to url: URL, format: OutputFormat) -> Bool {
 }
 ```
 
-- [ ] **Step 2: Add the per-PDF processing function**
+- [x] **Step 2: Add the per-PDF processing function**
 
 In `pdf-to-images.swift`, **above `// MARK: - Entry point`** and below the rendering section, insert:
 
@@ -264,7 +264,7 @@ func processPDF(at path: String, format: OutputFormat) -> PDFResult? {
 }
 ```
 
-- [ ] **Step 3: Wire processing into the entry point**
+- [x] **Step 3: Wire processing into the entry point**
 
 In `pdf-to-images.swift`, replace the `case .success(let args):` block with:
 
@@ -280,12 +280,12 @@ case .success(let args):
 }
 ```
 
-- [ ] **Step 4: Verify it typechecks**
+- [x] **Step 4: Verify it typechecks**
 
 Run: `swiftc -typecheck pdf-to-images.swift`
 Expected: silent, exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pdf-to-images.swift
@@ -299,7 +299,7 @@ git commit -m "feat: render every PDF page to per-page images"
 **Files:**
 - Modify: `pdf-to-images.swift`
 
-- [ ] **Step 1: Add the montage builder**
+- [x] **Step 1: Add the montage builder**
 
 In `pdf-to-images.swift`, in the `// MARK: - Rendering` section, **below `writeImage`**, insert:
 
@@ -363,7 +363,7 @@ func buildMontage(pageImages: [CGImage]) -> CGImage? {
 }
 ```
 
-- [ ] **Step 2: Call the montage builder from `processPDF`**
+- [x] **Step 2: Call the montage builder from `processPDF`**
 
 In `pdf-to-images.swift`, in `processPDF`, replace:
 
@@ -398,7 +398,7 @@ with:
                      pagesDir: pagesDir, pageImages: pageImages, montageURL: montageURL)
 ```
 
-- [ ] **Step 3: Extend `PDFResult` and the summary line**
+- [x] **Step 3: Extend `PDFResult` and the summary line**
 
 In `pdf-to-images.swift`, replace the `struct PDFResult` definition with:
 
@@ -419,12 +419,12 @@ Then in the entry point, replace the `print(...)` line with:
         print("\(result.name): \(result.pageCount) page(s) in \(result.pagesDir.lastPathComponent)\(montageNote)")
 ```
 
-- [ ] **Step 4: Verify it typechecks**
+- [x] **Step 4: Verify it typechecks**
 
 Run: `swiftc -typecheck pdf-to-images.swift`
 Expected: silent, exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pdf-to-images.swift
@@ -438,7 +438,7 @@ git commit -m "feat: build near-square montage of all pages"
 **Files:**
 - Create: `tests/make-fixture.swift`
 
-- [ ] **Step 1: Write the fixture generator**
+- [x] **Step 1: Write the fixture generator**
 
 Create `tests/make-fixture.swift`:
 
@@ -489,7 +489,7 @@ ctx.closePDF()
 print("wrote \(pageCount)-page fixture to \(outPath)")
 ```
 
-- [ ] **Step 2: Verify it runs**
+- [x] **Step 2: Verify it runs**
 
 Run:
 ```bash
@@ -497,7 +497,7 @@ swift tests/make-fixture.swift /tmp/fixture.pdf 5 && ls -l /tmp/fixture.pdf
 ```
 Expected: prints `wrote 5-page fixture to /tmp/fixture.pdf`, file exists and is non-empty.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/make-fixture.swift
@@ -511,7 +511,7 @@ git commit -m "test: deterministic primary-color PDF fixture generator"
 **Files:**
 - Create: `tests/check-pixels.swift`
 
-- [ ] **Step 1: Write the pixel reader**
+- [x] **Step 1: Write the pixel reader**
 
 Create `tests/check-pixels.swift`:
 
@@ -556,7 +556,7 @@ ctx.draw(image, in: CGRect(x: -px, y: -(h - 1 - py), width: w, height: h))
 print("\(w)x\(h) \(pixel[0]) \(pixel[1]) \(pixel[2])")
 ```
 
-- [ ] **Step 2: Verify it reads a known image**
+- [x] **Step 2: Verify it reads a known image**
 
 Run:
 ```bash
@@ -566,7 +566,7 @@ swift tests/check-pixels.swift /tmp/fixture_pages/page-1.png
 ```
 Expected: last command prints something like `1224x1584 255 0 0` (red page 1, 144 DPI doubles 612x792). RGB must be `255 0 0` (PNG is lossless).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/check-pixels.swift
@@ -580,7 +580,7 @@ git commit -m "test: image center-pixel reader helper"
 **Files:**
 - Create: `tests/run-integration-test.sh`
 
-- [ ] **Step 1: Write the integration test**
+- [x] **Step 1: Write the integration test**
 
 Create `tests/run-integration-test.sh`:
 
@@ -648,7 +648,7 @@ done
 echo "ALL INTEGRATION TESTS PASSED"
 ```
 
-- [ ] **Step 2: Make it executable and run it**
+- [x] **Step 2: Make it executable and run it**
 
 Run:
 ```bash
@@ -659,7 +659,7 @@ Expected: prints per-page "fill ok" lines for both formats and finally `ALL INTE
 
 If the montage cell sample fails, adjust the fractional coordinates: the test comment documents the grid math (cols=3, rows=2 for 5 pages); the top-left cell center is at `x ≈ 0.5/3`, `y ≈ 0.5/2` from the top. `check-pixels.swift` measures `fracY` from the top.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/run-integration-test.sh
@@ -674,7 +674,7 @@ git commit -m "test: primary-color integration test for both formats"
 - Create: `wrappers/dispatcher.sh.tmpl`
 - Create: `build-wrappers.sh`
 
-- [ ] **Step 1: Write the dispatcher template**
+- [x] **Step 1: Write the dispatcher template**
 
 Create `wrappers/dispatcher.sh.tmpl`:
 
@@ -712,7 +712,7 @@ fi
 exit $STATUS
 ```
 
-- [ ] **Step 2: Write the wrapper build script**
+- [x] **Step 2: Write the wrapper build script**
 
 Create `build-wrappers.sh`:
 
@@ -852,7 +852,7 @@ Note the input type change vs. the original: `AMAccepts`/`AMProvides` use
 `com.adobe.pdf` so the Quick Action only appears for PDFs — closing audit
 item #4 (non-PDF inputs).
 
-- [ ] **Step 3: Run the build and verify the workflows**
+- [x] **Step 3: Run the build and verify the workflows**
 
 Run:
 ```bash
@@ -865,7 +865,7 @@ ls "Convert PDF to JPG.workflow/Contents/"
 ```
 Expected: `built:` lines for both; all `plutil -lint` print `OK`; the `Contents/` listing shows `document.wflow`, `Info.plist`, `pdf-to-images.swift`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add wrappers/dispatcher.sh.tmpl build-wrappers.sh "Convert PDF to JPG.workflow" "Convert PDF to PNG.workflow"
@@ -879,7 +879,7 @@ git commit -m "feat: build JPG and PNG Automator Quick Action wrappers"
 **Files:**
 - Delete: old `Convert PDF to JPG.workflow/Contents/QuickLook/` if present and stale
 
-- [ ] **Step 1: Confirm the rebuilt workflow replaced the old one**
+- [x] **Step 1: Confirm the rebuilt workflow replaced the old one**
 
 Run:
 ```bash
@@ -888,7 +888,7 @@ git status --short
 ```
 Expected: prints `clean` (the rebuilt `document.wflow` has no `sips`). `git status` shows the workflow dirs as modified/added from Task 7.
 
-- [ ] **Step 2: Remove a stale QuickLook thumbnail if it survived the rebuild**
+- [x] **Step 2: Remove a stale QuickLook thumbnail if it survived the rebuild**
 
 The `build-wrappers.sh` `rm -rf` already removes the whole bundle before
 rebuilding, so no `QuickLook/Thumbnail.png` remains. Verify:
@@ -898,7 +898,7 @@ test -e "Convert PDF to JPG.workflow/Contents/QuickLook" && echo "present" || ec
 ```
 Expected: `absent`. If `present`, run `git rm -r "Convert PDF to JPG.workflow/Contents/QuickLook"`.
 
-- [ ] **Step 3: Commit (only if Step 2 removed anything)**
+- [x] **Step 3: Commit (only if Step 2 removed anything)**
 
 ```bash
 git add -A && git commit -m "chore: drop stale QuickLook thumbnail from workflow bundle"
@@ -914,7 +914,7 @@ If nothing was removed, skip this commit.
 - Create: `Convert PDF to JPG.shortcut`
 - Create: `Convert PDF to PNG.shortcut`
 
-- [ ] **Step 1: Build the JPG Shortcut**
+- [x] **Step 1: Build the JPG Shortcut**
 
 Invoke the shortcuts-playground build command:
 
@@ -924,7 +924,7 @@ Invoke the shortcuts-playground build command:
 
 Save the resulting `.shortcut` file to the repo root as `Convert PDF to JPG.shortcut`.
 
-- [ ] **Step 2: Build the PNG Shortcut**
+- [x] **Step 2: Build the PNG Shortcut**
 
 ```
 /shortcuts-playground:build Quick Action named "Convert PDF to PNG" identical to the JPG one but with {{FORMAT}} replaced by png
@@ -932,7 +932,7 @@ Save the resulting `.shortcut` file to the repo root as `Convert PDF to JPG.shor
 
 Save to repo root as `Convert PDF to PNG.shortcut`.
 
-- [ ] **Step 3: Verify the Shortcuts are well-formed**
+- [x] **Step 3: Verify the Shortcuts are well-formed**
 
 Run:
 ```bash
@@ -940,7 +940,7 @@ file "Convert PDF to JPG.shortcut" "Convert PDF to PNG.shortcut"
 ```
 Expected: both report as data/plist files (signed `.shortcut` archives). The shortcuts-playground skill validates structure during the build; if it reports errors, fix them before committing.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add "Convert PDF to JPG.shortcut" "Convert PDF to PNG.shortcut"
@@ -956,7 +956,7 @@ git commit -m "feat: add JPG and PNG Shortcuts Quick Actions"
 - Create: `release-please-config.json`
 - Create: `.release-please-manifest.json`
 
-- [ ] **Step 1: Create the version file**
+- [x] **Step 1: Create the version file**
 
 Create `version.txt`:
 
@@ -964,7 +964,7 @@ Create `version.txt`:
 1.0.0
 ```
 
-- [ ] **Step 2: Create the release-please config**
+- [x] **Step 2: Create the release-please config**
 
 Create `release-please-config.json`:
 
@@ -998,7 +998,7 @@ Create `release-please-config.json`:
 }
 ```
 
-- [ ] **Step 3: Create the manifest**
+- [x] **Step 3: Create the manifest**
 
 Create `.release-please-manifest.json`:
 
@@ -1008,7 +1008,7 @@ Create `.release-please-manifest.json`:
 }
 ```
 
-- [ ] **Step 4: Mark version.txt for release-please tracking**
+- [x] **Step 4: Mark version.txt for release-please tracking**
 
 release-please's `simple` updater replaces a version string in `extra-files`
 only when the file contains a recognizable version. `version.txt` containing a
@@ -1023,7 +1023,7 @@ python3 -c "import json; json.load(open('.release-please-manifest.json')); print
 ```
 Expected: `config OK` and `manifest OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add version.txt release-please-config.json .release-please-manifest.json
@@ -1040,7 +1040,7 @@ git commit -m "build: add release-please configuration"
 - Create: `.github/workflows/cd.yml`
 - Create: `.github/dependabot.yml`
 
-- [ ] **Step 1: Create the CI workflow**
+- [x] **Step 1: Create the CI workflow**
 
 Create `.github/workflows/ci.yml`:
 
@@ -1080,7 +1080,7 @@ jobs:
         run: ./tests/run-integration-test.sh
 ```
 
-- [ ] **Step 2: Create the release workflow**
+- [x] **Step 2: Create the release workflow**
 
 Create `.github/workflows/release.yml`:
 
@@ -1117,7 +1117,7 @@ jobs:
           manifest-file: .release-please-manifest.json
 ```
 
-- [ ] **Step 3: Create the CD workflow**
+- [x] **Step 3: Create the CD workflow**
 
 Create `.github/workflows/cd.yml`:
 
@@ -1180,7 +1180,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-- [ ] **Step 4: Create dependabot config**
+- [x] **Step 4: Create dependabot config**
 
 Create `.github/dependabot.yml`:
 
@@ -1203,7 +1203,7 @@ updates:
       include: scope
 ```
 
-- [ ] **Step 5: Validate the YAML**
+- [x] **Step 5: Validate the YAML**
 
 Run:
 ```bash
@@ -1213,7 +1213,7 @@ done
 ```
 Expected: four `OK` lines.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github
@@ -1229,7 +1229,7 @@ git commit -m "ci: add CI, release-please, and release-artifact workflows"
 - Modify: `README.md` (full rewrite)
 - Delete: `download_zip.png`, `thumbnail.png` if no longer referenced
 
-- [ ] **Step 1: Create the MIT LICENSE crediting the original author**
+- [x] **Step 1: Create the MIT LICENSE crediting the original author**
 
 Create `LICENSE`:
 
@@ -1258,7 +1258,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-- [ ] **Step 2: Rewrite the README**
+- [x] **Step 2: Rewrite the README**
 
 Replace the entire contents of `README.md` with:
 
@@ -1333,7 +1333,7 @@ swift pdf-to-images.swift --format png path/to/file.pdf
 [MIT](LICENSE). Original work © sanjeed5; modifications © Jon Bogaty.
 ```
 
-- [ ] **Step 3: Remove now-unreferenced images**
+- [x] **Step 3: Remove now-unreferenced images**
 
 The rewritten README no longer references `download_zip.png` or `thumbnail.png`.
 `video.mp4` is also no longer referenced. Remove them:
@@ -1342,7 +1342,7 @@ The rewritten README no longer references `download_zip.png` or `thumbnail.png`.
 git rm download_zip.png thumbnail.png video.mp4
 ```
 
-- [ ] **Step 4: Verify no dangling references**
+- [x] **Step 4: Verify no dangling references**
 
 Run:
 ```bash
@@ -1350,7 +1350,7 @@ grep -nE 'download_zip|thumbnail\.png|video\.mp4' README.md && echo "DANGLING" |
 ```
 Expected: `clean`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add LICENSE README.md
@@ -1363,7 +1363,7 @@ git commit -m "docs: MIT license and rewritten README for pdf-to-images"
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Full local test pass**
+- [x] **Step 1: Full local test pass**
 
 Run:
 ```bash
@@ -1375,7 +1375,7 @@ plutil -lint "Convert PDF to PNG.workflow/Contents/document.wflow"
 ```
 Expected: typecheck silent; integration test ends `ALL INTEGRATION TESTS PASSED`; both `plutil -lint` print `OK`.
 
-- [ ] **Step 2: Real multi-page PDF smoke test**
+- [x] **Step 2: Real multi-page PDF smoke test**
 
 If a real multi-page PDF is available at `/tmp/real.pdf` (or generate a larger
 fixture), run both formats and eyeball the output:
@@ -1390,7 +1390,7 @@ open /tmp/real_montage.jpg
 Expected: four `page-N.jpg` and four `page-N.png` files; `real_montage.jpg` is a
 2×2 grid (4 pages → cols=2, rows=2) with red/green/blue/yellow cells.
 
-- [ ] **Step 3: Confirm clean git state and push**
+- [x] **Step 3: Confirm clean git state and push**
 
 ```bash
 git status --short
@@ -1399,7 +1399,7 @@ git push origin main
 ```
 Expected: clean working tree; the task commits listed; push succeeds.
 
-- [ ] **Step 4: Post-push CI verification**
+- [x] **Step 4: Post-push CI verification**
 
 After pushing, open a PR (or push triggers `release.yml` on main directly).
 Verify on GitHub:
