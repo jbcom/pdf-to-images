@@ -1,0 +1,56 @@
+name: Deploy Release Artifacts
+
+on:
+  workflow_run:
+    workflows:
+      - Release
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+jobs:
+  attach-artifacts:
+    name: Zip and attach wrappers
+    runs-on: macos-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Resolve latest release tag
+        id: rel
+        run: |
+          TAG="$(gh release view --json tagName --jq .tagName)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build wrappers
+        run: ./build-wrappers.sh
+
+      - name: Zip wrappers
+        run: |
+          mkdir -p dist
+          for name in "Convert PDF to JPG.workflow" "Convert PDF to PNG.workflow" \
+                      "Convert PDF to JPG.shortcut" "Convert PDF to PNG.shortcut"; do
+            [ -e "$name" ] || { echo "missing: $name" >&2; exit 1; }
+            ditto -c -k --sequesterRsrc --keepParent "$name" "dist/${name// /-}.zip"
+          done
+          ls -l dist
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          files: dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
