@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Integration test for pdf-to-images.swift.
+# Integration test for pdf-to-images.swift and the Quick Action wrappers.
 # Generates a 5-page primary-color PDF, runs the engine in both formats,
-# and asserts page count, per-page fill colors, and montage geometry.
+# asserts page count / per-page fill colors / montage geometry, then verifies
+# the wrappers run headless-safe (no blocking modal dialog).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,5 +58,63 @@ for FORMAT in jpg png; do
     || fail "$FORMAT: montage top-left cell = ($CELL_RGB), expected red"
   echo "  montage top-left cell ok ($CELL_RGB)"
 done
+
+# --- Wrapper headless-safety -------------------------------------------------
+# A wrapper must NEVER open a blocking modal dialog: it has to run under agents
+# and CI without a human to dismiss a popup. Build the wrappers, then run the
+# generated Shortcut shell body headlessly (PDF_TO_IMAGES_QUIET=1) under a hard
+# timeout — if it ever reintroduced `display alert`, the run would hang and the
+# timeout would trip.
+echo "=== wrapper headless-safety ==="
+"$REPO_ROOT/build-wrappers.sh" >/dev/null
+SHORTCUT_JPG="$REPO_ROOT/wrappers/shortcut-jpg.sh"
+[ -f "$SHORTCUT_JPG" ] || fail "wrapper: shortcut-jpg.sh not generated"
+
+# Bound every wrapper run so a reintroduced blocking dialog fails instead of hangs.
+run_bounded() {
+  # run_bounded <seconds> <command...>
+  local limit="$1"; shift
+  "$@" &
+  local pid=$!
+  ( sleep "$limit"; kill -9 "$pid" 2>/dev/null ) &
+  local killer=$!
+  local rc=0
+  wait "$pid" 2>/dev/null || rc=$?
+  kill "$killer" 2>/dev/null || true
+  return "$rc"
+}
+
+# A wrapper must NOT call osascript in quiet mode — assert by stubbing a fake
+# osascript on PATH that fails loudly if invoked.
+STUB_BIN="$WORK/stubbin"
+mkdir -p "$STUB_BIN"
+cat > "$STUB_BIN/osascript" <<'STUB'
+#!/bin/sh
+echo "FAIL: wrapper invoked osascript under PDF_TO_IMAGES_QUIET" >&2
+exit 99
+STUB
+chmod +x "$STUB_BIN/osascript"
+
+# Valid PDF, headless: must succeed, produce output, never call osascript.
+HPDF="$WORK/headless.pdf"
+swift "$REPO_ROOT/tests/make-fixture.swift" "$HPDF" 3 >/dev/null
+WRAP_OUT="$WORK/wrap.out"
+if ! PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+     run_bounded 60 zsh "$SHORTCUT_JPG" "$HPDF" >"$WRAP_OUT" 2>&1; then
+  cat "$WRAP_OUT" >&2
+  fail "wrapper: headless run on a valid PDF did not exit cleanly (hang or osascript call)"
+fi
+[ -f "$WORK/headless_pages/page-3.jpg" ] || fail "wrapper: headless run produced no page images"
+echo "  wrapper headless valid-PDF run ok (no dialog, no osascript)"
+
+# Missing PDF, headless: must FAIL fast (non-zero) without hanging or osascript.
+if PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+   run_bounded 60 zsh "$SHORTCUT_JPG" "$WORK/does-not-exist.pdf" >"$WRAP_OUT" 2>&1; then
+  cat "$WRAP_OUT" >&2
+  fail "wrapper: headless run on a missing PDF unexpectedly succeeded"
+fi
+grep -q 'file not found' "$WRAP_OUT" \
+  || fail "wrapper: missing-PDF error not surfaced to stderr"
+echo "  wrapper headless missing-PDF run ok (failed fast, no dialog)"
 
 echo "ALL INTEGRATION TESTS PASSED"
