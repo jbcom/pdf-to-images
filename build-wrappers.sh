@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Assembles the four Quick Action wrappers from the template + engine.
-# Automator .workflow bundles are built here; .shortcut files are built
-# separately via the shortcuts-playground skill and committed directly.
+# Assembles the Quick Action wrappers from the templates + engine.
+#
+# Automator .workflow bundles are built here in full. For the .shortcut
+# wrappers this script generates their self-contained shell bodies
+# (wrappers/shortcut-<fmt>.sh, with the engine embedded); the actual
+# .shortcut files are built from those bodies via the shortcuts-playground
+# skill and committed directly.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMPL="$REPO_ROOT/wrappers/dispatcher.sh.tmpl"
+SHORTCUT_TMPL="$REPO_ROOT/wrappers/shortcut-dispatcher.sh.tmpl"
 ENGINE="$REPO_ROOT/pdf-to-images.swift"
 
 build_workflow() {
@@ -137,6 +142,37 @@ INFO
   echo "built: $wf"
 }
 
+# Generate the self-contained shell body for a .shortcut wrapper. Unlike the
+# .workflow bundle, a .shortcut cannot carry a sibling engine file, so the full
+# engine source is embedded into the script. Splicing is pure parameter
+# expansion — zero interpretation of the engine source.
+build_shortcut_script() {
+  local format="$1"
+  local out="$REPO_ROOT/wrappers/shortcut-$format.sh"
+
+  # Read the Shortcut dispatcher template, substitute the format.
+  local template
+  template="$(sed "s/{{FORMAT}}/$format/g" "$SHORTCUT_TMPL")"
+
+  # Read the engine source verbatim.
+  local engine_src
+  engine_src="$(cat "$ENGINE")"
+
+  # Splice the engine into the {{ENGINE}} placeholder via parameter expansion.
+  # The engine is written inside a quoted heredoc in the template, so its $
+  # variables and backslashes survive untouched.
+  local before after
+  before="${template%%\{\{ENGINE\}\}*}"
+  after="${template##*\{\{ENGINE\}\}}"
+  printf '%s%s%s\n' "$before" "$engine_src" "$after" > "$out"
+
+  echo "built: $out"
+}
+
 build_workflow jpg JPG
 build_workflow png PNG
-echo "workflows built. Shortcuts are built via the shortcuts-playground skill."
+build_shortcut_script jpg
+build_shortcut_script png
+echo "workflows built; shortcut shell bodies generated."
+echo "The .shortcut files are built from wrappers/shortcut-<fmt>.sh via the"
+echo "shortcuts-playground skill."
