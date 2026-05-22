@@ -40,11 +40,20 @@ jobs:
       - name: Zip wrappers
         run: |
           mkdir -p dist
+          count=0
           for name in "Convert PDF to JPG.workflow" "Convert PDF to PNG.workflow" \
                       "Convert PDF to JPG.shortcut" "Convert PDF to PNG.shortcut"; do
-            [ -e "$name" ] || { echo "missing: $name" >&2; exit 1; }
+            if [ ! -e "$name" ]; then
+              echo "skipping missing wrapper: $name"
+              continue
+            fi
             ditto -c -k --sequesterRsrc --keepParent "$name" "dist/${name// /-}.zip"
+            count=$((count + 1))
           done
+          if [ "$count" -eq 0 ]; then
+            echo "error: no wrappers found to attach" >&2
+            exit 1
+          fi
           ls -l dist
 
       - name: Attach to release
