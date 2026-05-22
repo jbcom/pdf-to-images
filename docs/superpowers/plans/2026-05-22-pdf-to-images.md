@@ -918,7 +918,7 @@ If nothing was removed, skip this commit.
 
 Invoke the shortcuts-playground build command:
 
-```
+```text
 /shortcuts-playground:build Quick Action named "Convert PDF to JPG" that receives PDF files from Quick Actions in Finder, runs a Run Shell Script action with shell /bin/zsh that passes the input file paths as arguments, and whose script body is the contents of wrappers/dispatcher.sh.tmpl with {{FORMAT}} replaced by jpg and the engine path pointing at a sibling pdf-to-images.swift
 ```
 
@@ -926,7 +926,7 @@ Save the resulting `.shortcut` file to the repo root as `Convert PDF to JPG.shor
 
 - [x] **Step 2: Build the PNG Shortcut**
 
-```
+```text
 /shortcuts-playground:build Quick Action named "Convert PDF to PNG" identical to the JPG one but with {{FORMAT}} replaced by png
 ```
 
@@ -960,7 +960,7 @@ git commit -m "feat: add JPG and PNG Shortcuts Quick Actions"
 
 Create `version.txt`:
 
-```
+```text
 1.0.0
 ```
 
@@ -1233,7 +1233,7 @@ git commit -m "ci: add CI, release-please, and release-artifact workflows"
 
 Create `LICENSE`:
 
-```
+```text
 MIT License
 
 Copyright (c) 2024 sanjeed5 (original author)
@@ -1326,7 +1326,7 @@ swift pdf-to-images.swift --format png path/to/file.pdf
 
 # Run the integration test
 ./tests/run-integration-test.sh
-```
+```text
 
 ## License
 
@@ -1429,4 +1429,4 @@ If `release.yml` fails with a permissions error, confirm the org secret
 - **Type consistency:** `OutputFormat`, `PDFResult` (final 5-field shape set in
   Task 3), `processPDF`, `renderPage`, `writeImage`, `buildMontage` names are
   consistent across tasks.
-```
+```text

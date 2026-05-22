@@ -43,7 +43,7 @@ Automator is also being phased out by Apple in favor of Shortcuts.
 
 Single engine, four thin wrappers (one Automator + one Shortcut per format):
 
-```
+```text
 pdf-to-images.swift                 ← engine (PDFKit/Quartz, zero deps)
   ├── Convert PDF to JPG.workflow   ← Automator Quick Action (jpg)
   ├── Convert PDF to PNG.workflow   ← Automator Quick Action (png)
