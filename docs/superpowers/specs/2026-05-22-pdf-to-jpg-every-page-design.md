@@ -143,11 +143,23 @@ the engine, but they carry it differently because their file shapes differ:
 The dispatcher body is identical across all four except the literal `jpg`/`png`
 — generated from one template at build time so the four stay in lockstep.
 
+**No blocking dialogs — runs headless-safe.** A wrapper may be invoked
+interactively (a human in Finder) *or* non-interactively (an agent, CI, cron,
+another script). It must never open a **modal** dialog: `osascript … display
+alert` blocks until a human clicks it, hanging any headless run. Every wrapper
+routes user messaging through a single `notify()` helper that (a) always writes
+the full text to stderr and (b) posts a *non-blocking* `display notification`
+banner — never a `display alert`. Setting `PDF_TO_IMAGES_QUIET=1` suppresses the
+notification entirely, so a fully headless caller gets pure stdout/stderr with
+zero GUI. The Xcode-CLT install popup is likewise triggered only on interactive
+runs. This is a hard requirement: the wrapper layer is automatable.
+
 ### Error handling
 
 - Per-PDF failures (not a PDF, unreadable, zero pages) print to stderr, skip,
   and continue. The batch does not abort on one bad file.
-- The wrappers surface a Finder/Notification Center message on completion.
+- The wrappers surface completion via a **non-blocking** notification (or
+  stderr only, under `PDF_TO_IMAGES_QUIET`). Never a modal dialog.
 - Engine exits non-zero only when no input produced output.
 
 ## CI/CD
