@@ -26,7 +26,12 @@ build_workflow() {
   local esc
   esc="$(printf '%s' "$dispatcher" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')"
 
-  cat > "$contents/document.wflow" <<PLIST
+  # Capture the workflow plist from a QUOTED heredoc so no shell expansion
+  # happens — a future variable-name collision between the dispatcher
+  # template and this script can no longer corrupt the generated workflow.
+  # The escaped dispatcher is spliced in afterward via a literal placeholder.
+  local template_plist
+  template_plist="$(cat <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -59,7 +64,7 @@ build_workflow() {
 				<key>ActionParameters</key>
 				<dict>
 					<key>COMMAND_STRING</key>
-					<string>$esc</string>
+					<string>@@DISPATCHER@@</string>
 					<key>CheckedForUserDefaultShell</key><true/>
 					<key>inputMethod</key><integer>1</integer>
 					<key>shell</key><string>/bin/zsh</string>
@@ -98,6 +103,15 @@ build_workflow() {
 </dict>
 </plist>
 PLIST
+)"
+
+  # Splice the escaped dispatcher into the placeholder using pure shell
+  # parameter expansion — zero interpretation of $esc (no sed/awk regex or
+  # & re-interpretation), so the embedded script lands byte-for-byte.
+  local before after
+  before="${template_plist%%@@DISPATCHER@@*}"
+  after="${template_plist##*@@DISPATCHER@@}"
+  printf '%s%s%s\n' "$before" "$esc" "$after" > "$contents/document.wflow"
 
   cat > "$contents/Info.plist" <<INFO
 <?xml version="1.0" encoding="UTF-8"?>
