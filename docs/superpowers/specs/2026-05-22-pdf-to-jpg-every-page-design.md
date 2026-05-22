@@ -27,28 +27,37 @@ Automator is also being phased out by Apple in favor of Shortcuts.
   macOS "install developer tools" popup if Xcode CLT is absent.
 - Standard CI/CD: `ci.yml` → `release.yml` → `cd.yml` with release-please.
 - Break the GitHub fork relationship; credit the original author.
+- Rename the repo to `pdf-to-images` — the project is the engine, not any one
+  wrapper. Keep the engine OS-agnostic so Linux DE integration (GNOME Files /
+  Dolphin / Nautilus actions) can be added later without touching it.
 
 ## Non-goals
 
 - Output formats other than JPEG.
 - Configurable DPI/quality UI (fixed sensible defaults).
-- Windows/Linux support.
+- Linux/Windows wrappers **in this iteration** — the engine stays portable so
+  Linux integration is a clean future addition, but no Linux wrapper ships now.
 
 ## Architecture
 
 Single engine, two thin wrappers:
 
 ```
-pdf-to-jpg-montage.swift            ← engine (PDFKit/Quartz, zero deps)
+pdf-to-images.swift                 ← engine (PDFKit/Quartz, zero deps)
   ├── Convert PDF to JPG.workflow   ← Automator Quick Action wrapper
   └── Convert PDF to JPG.shortcut   ← Shortcuts Quick Action wrapper
 ```
 
-### Engine — `pdf-to-jpg-montage.swift`
+### Engine — `pdf-to-images.swift`
 
-Swift script run via `swift pdf-to-jpg-montage.swift <pdf> [<pdf> ...]`.
+Swift script run via `swift pdf-to-images.swift <pdf> [<pdf> ...]`.
 `swift` ships with the Xcode Command Line Tools; if absent, invoking it triggers
 the standard macOS "install developer tools" popup. No Homebrew, no `sips`.
+
+The engine depends only on PDFKit + CoreGraphics, both of which Swift exposes on
+Linux too (via swift-corelibs / the open-source PDFKit shims). It is written so
+that platform-specific code paths, if ever needed, are isolated behind `#if
+os(macOS)` — keeping a future Linux build a wrapper-only effort.
 
 Per PDF argument:
 
@@ -74,7 +83,7 @@ Case-insensitive extension handling: strip the extension via path APIs
 
 ### Wrappers
 
-Both wrappers locate `pdf-to-jpg-montage.swift` relative to themselves and run
+Both wrappers locate `pdf-to-images.swift` relative to themselves and run
 `swift <script> "$@"`, so a user who downloads a release artifact just
 double-clicks to install — no repo clone needed.
 
@@ -99,7 +108,7 @@ GitHub on 2026-05-22 (not training data); the trailing comment records the tag.
 
 ### `ci.yml` — on `pull_request`, `macos-latest`
 
-1. `swift -typecheck pdf-to-jpg-montage.swift` — compile check.
+1. `swift -typecheck pdf-to-images.swift` — compile check.
 2. **Integration test** (`tests/run-integration-test.sh`):
    - `tests/make-fixture.swift` generates a deterministic PDF whose pages are
      each a solid primary fill (page 1 red, 2 green, 3 blue, 4 yellow, …).
@@ -172,7 +181,7 @@ Wired into `ci.yml` on `macos-latest`.
 ## File layout (after implementation)
 
 ```
-pdf-to-jpg-montage.swift
+pdf-to-images.swift
 version.txt
 release-please-config.json
 .release-please-manifest.json
