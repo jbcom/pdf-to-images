@@ -1,11 +1,11 @@
-# Convert PDF to JPG — every page + montage
+# pdf-to-images — every page + montage
 
 **Date:** 2026-05-22
 **Status:** Approved
 
 ## Problem
 
-The current repo ships a macOS Automator Quick Action that converts a PDF to a
+The original repo ships a macOS Automator Quick Action that converts a PDF to a
 single JPG via `sips`. It has defects:
 
 1. **`sips` only rasterizes page 1** of a multi-page PDF — a hard tool limitation,
@@ -20,9 +20,10 @@ Automator is also being phased out by Apple in favor of Shortcuts.
 
 ## Goals
 
-- Extract **every** page of a PDF as its own JPG into a subdirectory.
+- Extract **every** page of a PDF as its own image into a subdirectory.
+- Support **JPG and PNG** output.
 - Build a **montage** image of all pages.
-- Ship a modern **Shortcut** alongside the fixed **Automator workflow**.
+- Ship modern **Shortcuts** alongside fixed **Automator workflows**.
 - **Zero Homebrew dependencies.** The only acceptable install prompt is the
   macOS "install developer tools" popup if Xcode CLT is absent.
 - Standard CI/CD: `ci.yml` → `release.yml` → `cd.yml` with release-please.
@@ -33,31 +34,37 @@ Automator is also being phased out by Apple in favor of Shortcuts.
 
 ## Non-goals
 
-- Output formats other than JPEG.
+- Output formats other than JPG/PNG (e.g. TIFF, WebP).
 - Configurable DPI/quality UI (fixed sensible defaults).
 - Linux/Windows wrappers **in this iteration** — the engine stays portable so
   Linux integration is a clean future addition, but no Linux wrapper ships now.
 
 ## Architecture
 
-Single engine, two thin wrappers:
+Single engine, four thin wrappers (one Automator + one Shortcut per format):
 
 ```
 pdf-to-images.swift                 ← engine (PDFKit/Quartz, zero deps)
-  ├── Convert PDF to JPG.workflow   ← Automator Quick Action wrapper
-  └── Convert PDF to JPG.shortcut   ← Shortcuts Quick Action wrapper
+  ├── Convert PDF to JPG.workflow   ← Automator Quick Action (jpg)
+  ├── Convert PDF to PNG.workflow   ← Automator Quick Action (png)
+  ├── Convert PDF to JPG.shortcut   ← Shortcuts Quick Action (jpg)
+  └── Convert PDF to PNG.shortcut   ← Shortcuts Quick Action (png)
 ```
 
 ### Engine — `pdf-to-images.swift`
 
-Swift script run via `swift pdf-to-images.swift <pdf> [<pdf> ...]`.
-`swift` ships with the Xcode Command Line Tools; if absent, invoking it triggers
-the standard macOS "install developer tools" popup. No Homebrew, no `sips`.
+Swift script run via `swift pdf-to-images.swift --format <jpg|png> <pdf> [<pdf> ...]`.
+The `--format` flag defaults to `jpg` when omitted. `swift` ships with the Xcode
+Command Line Tools; if absent, invoking it triggers the standard macOS "install
+developer tools" popup. No Homebrew, no `sips`.
 
 The engine depends only on PDFKit + CoreGraphics, both of which Swift exposes on
 Linux too (via swift-corelibs / the open-source PDFKit shims). It is written so
 that platform-specific code paths, if ever needed, are isolated behind `#if
 os(macOS)` — keeping a future Linux build a wrapper-only effort.
+
+Argument parsing: a single optional `--format jpg|png` flag, then one or more
+PDF paths. Unknown format → error and non-zero exit before any work.
 
 Per PDF argument:
 
@@ -65,9 +72,12 @@ Per PDF argument:
    error to stderr, skip this PDF, continue with the rest.
 2. Create subdir `<PDFname>_pages/` beside the source PDF. **Overwrite cleanly**:
    if it exists, remove and recreate it so stale images never linger.
-3. Render every page to `page-001.jpg`, `page-002.jpg`, … (zero-padded to the
-   page count's width) at **144 DPI**, **JPEG quality 0.85**.
-4. Build `<PDFname>_montage.jpg` beside the PDF:
+3. Render every page to `page-001.<ext>`, `page-002.<ext>`, … (zero-padded to
+   the page count's width) at **144 DPI**, where `<ext>` is the chosen format.
+   - JPG: encoded at **quality 0.85**.
+   - PNG: lossless, no quality knob.
+4. Build `<PDFname>_montage.<ext>` beside the PDF, **in the same format as the
+   pages**:
    - Grid is near-square: `cols = ceil(sqrt(n))`, `rows = ceil(n / cols)`.
    - Each cell holds one page scaled to a uniform thumbnail width, preserving
      aspect ratio, centered, on a white background, with thin gray separators.
@@ -75,24 +85,34 @@ Per PDF argument:
 5. Print one summary line per PDF to stdout:
    `<name>.pdf → N page(s) in <name>_pages/ + montage`.
 
+Format handling is a single encode-step branch: pages render to a shared
+`CGImage`; only the final `CGImageDestination` UTI differs (`public.jpeg` vs
+`public.png`). This keeps jpg/png a one-line difference, not a code fork.
+
 Exit code: `0` if at least one PDF succeeded; non-zero only if **every** input
-failed.
+failed (or on a bad `--format` value).
 
 Case-insensitive extension handling: strip the extension via path APIs
 (`deletingPathExtension`), not a lowercase-only string suffix.
 
 ### Wrappers
 
-Both wrappers locate `pdf-to-images.swift` relative to themselves and run
-`swift <script> "$@"`, so a user who downloads a release artifact just
-double-clicks to install — no repo clone needed.
+Four wrappers — an Automator workflow and a Shortcut for each of jpg and png.
+Each locates `pdf-to-images.swift` relative to itself and runs
+`swift <script> --format <jpg|png> "$@"`, with the format hard-pinned per
+wrapper. A user who downloads a release artifact just double-clicks to install —
+no repo clone needed.
 
-- **`Convert PDF to JPG.workflow`** — the existing Run Shell Script action;
-  `COMMAND_STRING` replaced with the dispatcher. The script is bundled inside
-  `Contents/` so the workflow is self-contained.
-- **`Convert PDF to JPG.shortcut`** — a Quick Action (Finder, receives PDF
-  files) with a Run Shell Script action calling the same engine. Built and
-  validated via the `shortcuts-playground` skill.
+- **`Convert PDF to JPG.workflow` / `Convert PDF to PNG.workflow`** — the Run
+  Shell Script action; `COMMAND_STRING` is the dispatcher with its `--format`
+  fixed. The engine script is bundled inside each `Contents/` so the workflow is
+  self-contained.
+- **`Convert PDF to JPG.shortcut` / `Convert PDF to PNG.shortcut`** — Quick
+  Actions (Finder, receive PDF files) with a Run Shell Script action calling the
+  same engine. Built and validated via the `shortcuts-playground` skill.
+
+The dispatcher body is identical across all four except the literal `jpg`/`png`
+— generated from one template at build time so the four stay in lockstep.
 
 ### Error handling
 
@@ -113,15 +133,19 @@ GitHub on 2026-05-22 (not training data); the trailing comment records the tag.
    - `tests/make-fixture.swift` generates a deterministic PDF whose pages are
      each a solid primary fill (page 1 red, 2 green, 3 blue, 4 yellow, …).
      The fixture is generated at test time, not checked in as a binary.
-   - Run the engine on the fixture.
-   - Assert each `page-NNN.jpg` exists and its center pixel matches the
-     expected fill color within tolerance.
-   - Assert `<name>_montage.jpg` exists, has the expected grid dimensions, and
-     each grid cell's center pixel matches the corresponding page's fill.
+   - Run the engine on the fixture **once per format** (`--format jpg` and
+     `--format png`).
+   - For each format: assert each `page-NNN.<ext>` exists and its center pixel
+     matches the expected fill color within tolerance (PNG: exact match, since
+     it is lossless; JPG: within tolerance).
+   - Assert `<name>_montage.<ext>` exists in the matching format, has the
+     expected grid dimensions, and each grid cell's center pixel matches the
+     corresponding page's fill.
 
 Integration (not unit) testing is the right call here: the montage geometry and
 color fidelity are exactly what can silently regress, and a primary-color
-fixture makes every assertion deterministic.
+fixture makes every assertion deterministic. Running both formats also pins the
+encode-step branch.
 
 ### `release.yml` — on push to `main`
 
@@ -136,9 +160,9 @@ fixture makes every assertion deterministic.
 
 ### `cd.yml` — on `workflow_run` of "Release" completing successfully
 
-- Zip `Convert PDF to JPG.workflow` and `Convert PDF to JPG.shortcut` (each
-  bundling the engine script).
-- `softprops/action-gh-release` attaches both zips to the GitHub Release.
+- Zip each of the four wrappers (`Convert PDF to {JPG,PNG}.{workflow,shortcut}`),
+  each bundling the engine script.
+- `softprops/action-gh-release` attaches all four zips to the GitHub Release.
 - README install section points users at the Releases page — removes the
   "download the whole repository" friction.
 
@@ -159,14 +183,15 @@ needed during implementation, each resolved live from GitHub.)
 
 ## Repository changes
 
-- **Un-fork:** delete and recreate `jbcom/convert_pdf_to_jpg_on_mac` as a
-  standalone (non-fork) repo so it has its own Issues/Actions surface and no
-  upstream PR target. Local git history is the source of truth and is preserved.
+- **Un-fork (done):** `jbcom/convert_pdf_to_jpg_on_mac` was deleted and
+  recreated as standalone `jbcom/pdf-to-images` (`isFork: false`) so it has its
+  own Issues/Actions surface and no upstream PR target. Full local git history
+  was preserved and re-pushed.
 - **Attribution:** README and LICENSE credit the original author
   (`sanjeed5/convert_pdf_to_jpg_on_mac`).
-- **README rewrite:** install via Releases (download `.workflow` or
-  `.shortcut`), drop the "single-page only" caveat, document the
-  per-page-subdir + montage behavior.
+- **README rewrite:** install via Releases (download the `.workflow` or
+  `.shortcut` for the format you want), drop the "single-page only" caveat,
+  document the per-page-subdir + montage behavior and jpg/png choice.
 
 ## Testing
 
@@ -191,7 +216,9 @@ release-please-config.json
   workflows/cd.yml
   dependabot.yml
 Convert PDF to JPG.workflow/        (engine bundled inside Contents/)
+Convert PDF to PNG.workflow/        (engine bundled inside Contents/)
 Convert PDF to JPG.shortcut         (built via shortcuts-playground)
+Convert PDF to PNG.shortcut         (built via shortcuts-playground)
 tests/
   make-fixture.swift
   run-integration-test.sh
