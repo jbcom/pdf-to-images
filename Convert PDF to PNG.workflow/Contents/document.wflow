@@ -31,10 +31,10 @@
 				<dict>
 					<key>COMMAND_STRING</key>
 					<string>#!/bin/zsh
-# pdf-to-images wrapper dispatcher. jpg is substituted at build time.
+# pdf-to-images wrapper dispatcher. png is substituted at build time.
 # Receives PDF file paths as positional arguments from the Quick Action.
 
-FORMAT="jpg"
+FORMAT="png"
 
 # Locate the engine bundled next to this script.
 SCRIPT_DIR="${0:A:h}"

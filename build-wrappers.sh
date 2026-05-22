@@ -1,3 +1,32 @@
+#!/usr/bin/env bash
+# Assembles the four Quick Action wrappers from the template + engine.
+# Automator .workflow bundles are built here; .shortcut files are built
+# separately via the shortcuts-playground skill and committed directly.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TMPL="$REPO_ROOT/wrappers/dispatcher.sh.tmpl"
+ENGINE="$REPO_ROOT/pdf-to-images.swift"
+
+build_workflow() {
+  local format="$1" upper="$2"
+  local wf="$REPO_ROOT/Convert PDF to $upper.workflow"
+  local contents="$wf/Contents"
+  rm -rf "$wf"
+  mkdir -p "$contents"
+
+  # Bundle the engine inside the workflow.
+  cp "$ENGINE" "$contents/pdf-to-images.swift"
+
+  # Render the dispatcher for this format.
+  local dispatcher
+  dispatcher="$(sed "s/{{FORMAT}}/$format/g" "$TMPL")"
+
+  # Escape for embedding in the plist <string>.
+  local esc
+  esc="$(printf '%s' "$dispatcher" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')"
+
+  cat > "$contents/document.wflow" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -30,37 +59,7 @@
 				<key>ActionParameters</key>
 				<dict>
 					<key>COMMAND_STRING</key>
-					<string>#!/bin/zsh
-# pdf-to-images wrapper dispatcher. jpg is substituted at build time.
-# Receives PDF file paths as positional arguments from the Quick Action.
-
-FORMAT="jpg"
-
-# Locate the engine bundled next to this script.
-SCRIPT_DIR="${0:A:h}"
-ENGINE="$SCRIPT_DIR/pdf-to-images.swift"
-
-if ! /usr/bin/xcrun --find swift &gt;/dev/null 2&gt;&amp;1; then
-  osascript -e 'display alert "Developer tools required" message "Click Install when macOS prompts, then run this action again."' &gt;/dev/null 2&gt;&amp;1 || true
-  # Trigger the macOS "install developer tools" popup.
-  /usr/bin/swift --version &gt;/dev/null 2&gt;&amp;1
-  exit 1
-fi
-
-if [ ! -f "$ENGINE" ]; then
-  osascript -e 'display alert "pdf-to-images" message "Engine script not found next to the workflow."' &gt;/dev/null 2&gt;&amp;1 || true
-  exit 1
-fi
-
-OUTPUT="$(/usr/bin/swift "$ENGINE" --format "$FORMAT" "$@" 2&gt;&amp;1)"
-STATUS=$?
-
-if [ $STATUS -eq 0 ]; then
-  osascript -e "display notification \"$OUTPUT\" with title \"PDF to ${FORMAT:u}\"" &gt;/dev/null 2&gt;&amp;1 || true
-else
-  osascript -e "display alert \"PDF to ${FORMAT:u} failed\" message \"$OUTPUT\"" &gt;/dev/null 2&gt;&amp;1 || true
-fi
-exit $STATUS</string>
+					<string>$esc</string>
 					<key>CheckedForUserDefaultShell</key><true/>
 					<key>inputMethod</key><integer>1</integer>
 					<key>shell</key><string>/bin/zsh</string>
@@ -98,3 +97,32 @@ exit $STATUS</string>
 	</dict>
 </dict>
 </plist>
+PLIST
+
+  cat > "$contents/Info.plist" <<INFO
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict><key>default</key><string>Convert PDF to $upper</string></dict>
+			<key>NSMessage</key><string>runWorkflowAsService</string>
+			<key>NSRequiredContext</key>
+			<dict><key>NSApplicationIdentifier</key><string>com.apple.finder</string></dict>
+			<key>NSSendFileTypes</key>
+			<array><string>com.adobe.pdf</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>
+INFO
+
+  echo "built: $wf"
+}
+
+build_workflow jpg JPG
+build_workflow png PNG
+echo "workflows built. Shortcuts are built via the shortcuts-playground skill."

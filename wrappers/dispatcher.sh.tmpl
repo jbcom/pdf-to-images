@@ -1,0 +1,31 @@
+#!/bin/zsh
+# pdf-to-images wrapper dispatcher. {{FORMAT}} is substituted at build time.
+# Receives PDF file paths as positional arguments from the Quick Action.
+
+FORMAT="{{FORMAT}}"
+
+# Locate the engine bundled next to this script.
+SCRIPT_DIR="${0:A:h}"
+ENGINE="$SCRIPT_DIR/pdf-to-images.swift"
+
+if ! /usr/bin/xcrun --find swift >/dev/null 2>&1; then
+  osascript -e 'display alert "Developer tools required" message "Click Install when macOS prompts, then run this action again."' >/dev/null 2>&1 || true
+  # Trigger the macOS "install developer tools" popup.
+  /usr/bin/swift --version >/dev/null 2>&1
+  exit 1
+fi
+
+if [ ! -f "$ENGINE" ]; then
+  osascript -e 'display alert "pdf-to-images" message "Engine script not found next to the workflow."' >/dev/null 2>&1 || true
+  exit 1
+fi
+
+OUTPUT="$(/usr/bin/swift "$ENGINE" --format "$FORMAT" "$@" 2>&1)"
+STATUS=$?
+
+if [ $STATUS -eq 0 ]; then
+  osascript -e "display notification \"$OUTPUT\" with title \"PDF to ${FORMAT:u}\"" >/dev/null 2>&1 || true
+else
+  osascript -e "display alert \"PDF to ${FORMAT:u} failed\" message \"$OUTPUT\"" >/dev/null 2>&1 || true
+fi
+exit $STATUS
