@@ -199,13 +199,27 @@ struct PDFResult {
 /// Process one PDF: render every page into <name>_pages/. Returns nil on failure.
 func processPDF(at path: String, format: OutputFormat) -> PDFResult? {
     let pdfURL = URL(fileURLWithPath: path)
+
+    // Pre-flight the path so the error names the actual problem, not a
+    // generic "cannot open" — a wrapper surfaces this text in an alert.
+    let fm = FileManager.default
+    var isDirectory: ObjCBool = false
+    guard fm.fileExists(atPath: path, isDirectory: &isDirectory) else {
+        FileHandle.standardError.write(Data("error: file not found: '\(path)'\n".utf8))
+        return nil
+    }
+    if isDirectory.boolValue {
+        FileHandle.standardError.write(Data("error: not a file (is a directory): '\(path)'\n".utf8))
+        return nil
+    }
+
     guard let doc = PDFDocument(url: pdfURL) else {
-        FileHandle.standardError.write(Data("error: cannot open PDF '\(path)'\n".utf8))
+        FileHandle.standardError.write(Data("error: not a valid PDF: '\(path)'\n".utf8))
         return nil
     }
     let pageCount = doc.pageCount
     guard pageCount > 0 else {
-        FileHandle.standardError.write(Data("error: PDF '\(path)' has no pages\n".utf8))
+        FileHandle.standardError.write(Data("error: PDF has no pages: '\(path)'\n".utf8))
         return nil
     }
 

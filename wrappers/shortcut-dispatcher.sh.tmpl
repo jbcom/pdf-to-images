@@ -26,6 +26,8 @@ PDF_TO_IMAGES_ENGINE
 
 OUTPUT="$(/usr/bin/swift "$ENGINE" --format "$FORMAT" "$@" 2>&1)"
 STATUS=$?
+# Drop CoreGraphics' own CG_PDF_VERBOSE chatter from what we show the user.
+OUTPUT="$(printf '%s\n' "$OUTPUT" | /usr/bin/grep -v 'CG_PDF_VERBOSE' || true)"
 
 if [ $STATUS -eq 0 ]; then
   osascript -e "display notification \"$OUTPUT\" with title \"PDF to ${FORMAT:u}\"" >/dev/null 2>&1 || true
