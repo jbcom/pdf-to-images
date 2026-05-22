@@ -67,20 +67,30 @@ done
 # timeout would trip.
 echo "=== wrapper headless-safety ==="
 "$REPO_ROOT/build-wrappers.sh" >/dev/null
-SHORTCUT_JPG="$REPO_ROOT/wrappers/shortcut-jpg.sh"
-[ -f "$SHORTCUT_JPG" ] || fail "wrapper: shortcut-jpg.sh not generated"
 
-# Bound every wrapper run so a reintroduced blocking dialog fails instead of hangs.
+# Bound a wrapper run so a reintroduced blocking dialog fails instead of hangs.
+# The watchdog polls in short steps and self-exits once the job finishes, so it
+# is never SIGKILL'd — no job-control noise in the test output.
 run_bounded() {
   # run_bounded <seconds> <command...>
   local limit="$1"; shift
   "$@" &
   local pid=$!
-  ( sleep "$limit"; kill -9 "$pid" 2>/dev/null ) &
+  (
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null; do
+      if [ "$waited" -ge "$limit" ]; then
+        kill -9 "$pid" 2>/dev/null
+        break
+      fi
+      sleep 1
+      waited=$((waited + 1))
+    done
+  ) &
   local killer=$!
   local rc=0
   wait "$pid" 2>/dev/null || rc=$?
-  kill "$killer" 2>/dev/null || true
+  wait "$killer" 2>/dev/null || true
   return "$rc"
 }
 
@@ -95,26 +105,35 @@ exit 99
 STUB
 chmod +x "$STUB_BIN/osascript"
 
-# Valid PDF, headless: must succeed, produce output, never call osascript.
-HPDF="$WORK/headless.pdf"
-swift "$REPO_ROOT/tests/make-fixture.swift" "$HPDF" 3 >/dev/null
 WRAP_OUT="$WORK/wrap.out"
-if ! PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
-     run_bounded 60 zsh "$SHORTCUT_JPG" "$HPDF" >"$WRAP_OUT" 2>&1; then
-  cat "$WRAP_OUT" >&2
-  fail "wrapper: headless run on a valid PDF did not exit cleanly (hang or osascript call)"
-fi
-[ -f "$WORK/headless_pages/page-3.jpg" ] || fail "wrapper: headless run produced no page images"
-echo "  wrapper headless valid-PDF run ok (no dialog, no osascript)"
 
-# Missing PDF, headless: must FAIL fast (non-zero) without hanging or osascript.
-if PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
-   run_bounded 60 zsh "$SHORTCUT_JPG" "$WORK/does-not-exist.pdf" >"$WRAP_OUT" 2>&1; then
-  cat "$WRAP_OUT" >&2
-  fail "wrapper: headless run on a missing PDF unexpectedly succeeded"
-fi
-grep -q 'file not found' "$WRAP_OUT" \
-  || fail "wrapper: missing-PDF error not surfaced to stderr"
-echo "  wrapper headless missing-PDF run ok (failed fast, no dialog)"
+# Both the JPG and PNG Shortcut shell bodies must be headless-safe. They share
+# one template, but exercising both guards against a future template divergence.
+for WFMT in jpg png; do
+  SC="$REPO_ROOT/wrappers/shortcut-$WFMT.sh"
+  [ -f "$SC" ] || fail "wrapper: shortcut-$WFMT.sh not generated"
+
+  # Valid PDF, headless: must succeed, produce output, never call osascript.
+  HPDF="$WORK/headless_$WFMT.pdf"
+  swift "$REPO_ROOT/tests/make-fixture.swift" "$HPDF" 3 >/dev/null
+  if ! PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+       run_bounded 60 zsh "$SC" "$HPDF" >"$WRAP_OUT" 2>&1; then
+    cat "$WRAP_OUT" >&2
+    fail "$WFMT wrapper: headless valid-PDF run did not exit cleanly (hang or osascript call)"
+  fi
+  [ -f "$WORK/headless_${WFMT}_pages/page-3.$WFMT" ] \
+    || fail "$WFMT wrapper: headless run produced no page images"
+  echo "  $WFMT wrapper headless valid-PDF run ok (no dialog, no osascript)"
+
+  # Missing PDF, headless: must FAIL fast (non-zero) without hanging or osascript.
+  if PATH="$STUB_BIN:$PATH" PDF_TO_IMAGES_QUIET=1 \
+     run_bounded 60 zsh "$SC" "$WORK/does-not-exist.pdf" >"$WRAP_OUT" 2>&1; then
+    cat "$WRAP_OUT" >&2
+    fail "$WFMT wrapper: headless missing-PDF run unexpectedly succeeded"
+  fi
+  grep -q 'file not found' "$WRAP_OUT" \
+    || fail "$WFMT wrapper: missing-PDF error not surfaced to stderr"
+  echo "  $WFMT wrapper headless missing-PDF run ok (failed fast, no dialog)"
+done
 
 echo "ALL INTEGRATION TESTS PASSED"
