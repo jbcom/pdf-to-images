@@ -1,12 +1,20 @@
-# pdf-to-images — every page + montage
+---
+title: pdf-to-images — Design
+description: Architecture of pdf-to-images and the reasoning behind the main decisions.
+status: living
+---
 
-**Date:** 2026-05-22
-**Status:** Approved
+# pdf-to-images — Design
 
-## Problem
+This document records the architecture of pdf-to-images and the reasoning behind
+the main decisions. It is reference material for contributors; for usage see the
+[README](../README.md), for how to contribute see
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
-The original repo ships a macOS Automator Quick Action that converts a PDF to a
-single JPG via `sips`. It has defects:
+## Background
+
+pdf-to-images grew out of a macOS Automator Quick Action that converted a PDF to
+a single JPG via `sips`. That approach had several defects:
 
 1. **`sips` only rasterizes page 1** of a multi-page PDF — a hard tool limitation,
    hence the README's "single-page only" caveat.
@@ -164,12 +172,12 @@ runs. This is a hard requirement: the wrapper layer is automatable.
 
 ## CI/CD
 
-Three workflows. **Every `uses:` is pinned to a commit SHA** resolved live from
-GitHub on 2026-05-22 (not training data); the trailing comment records the tag.
+Three workflows. **Every `uses:` is pinned to a commit SHA**, with the version
+tag in a trailing comment.
 
 ### `ci.yml` — on `pull_request`, `macos-latest`
 
-1. `swift -typecheck pdf-to-images.swift` — compile check.
+1. `swiftc -typecheck pdf-to-images.swift` — compile check.
 2. **Integration test** (`tests/run-integration-test.sh`):
    - `tests/make-fixture.swift` generates a deterministic PDF whose pages are
      each a solid primary fill (page 1 red, 2 green, 3 blue, 4 yellow, …).
@@ -199,70 +207,57 @@ encode-step branch.
 - Authenticated with the `CI_GITHUB_TOKEN` secret (a PAT) so release PRs
   re-trigger CI.
 
-### `cd.yml` — on `workflow_run` of "Release" completing successfully
+### `cd.yml` — on `release: published`
 
-- Zip each of the four wrappers (`Convert PDF to {JPG,PNG}.{workflow,shortcut}`),
-  each bundling the engine script.
-- `softprops/action-gh-release` attaches all four zips to the GitHub Release.
-- README install section points users at the Releases page — removes the
+- Fires when release-please publishes a GitHub Release (its release PR merged).
+  Binding to the `release` event means the artifacts attach to the exact tag of
+  the release that triggered the run — no "latest release" ambiguity. Also
+  supports `workflow_dispatch` with an explicit tag input.
+- Rebuilds the wrappers, zips each of the four
+  (`Convert PDF to {JPG,PNG}.{workflow,shortcut}`), and skips any that are
+  missing rather than failing.
+- `softprops/action-gh-release` attaches the zips to that release.
+- The README install section points users at the Releases page — removing the
   "download the whole repository" friction.
 
 ### `dependabot.yml`
 
 `github-actions` ecosystem, monthly, so SHA pins stay current.
 
-## Pinned action SHAs (resolved 2026-05-22)
+### Action pinning
 
-| Action | SHA | Tag |
-|---|---|---|
-| actions/checkout | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` | v6.0.2 |
-| googleapis/release-please-action | `45996ed1f6d02564a971a2fa1b5860e934307cf7` | v5.0.0 |
-| softprops/action-gh-release | `b4309332981a82ec1c5618f44dd2e27cc8bfbfda` | v3.0.0 |
-
-These three are the complete set the three workflows use — every `uses:` line
-is pinned to the commit SHA above, with the tag in a trailing comment.
-
-## Repository changes
-
-- **Un-fork (done):** `jbcom/convert_pdf_to_jpg_on_mac` was deleted and
-  recreated as standalone `jbcom/pdf-to-images` (`isFork: false`) so it has its
-  own Issues/Actions surface and no upstream PR target. Full local git history
-  was preserved and re-pushed.
-- **Attribution:** README and LICENSE credit the original author
-  (`sanjeed5/convert_pdf_to_jpg_on_mac`).
-- **README rewrite:** install via Releases (download the `.workflow` or
-  `.shortcut` for the format you want), drop the "single-page only" caveat,
-  document the per-page-subdir + montage behavior and jpg/png choice.
+Every GitHub Action `uses:` line is pinned to a full commit SHA, with the
+version tag in a trailing comment. Dependabot's `github-actions` updates keep
+the pins current. The three actions in use are `actions/checkout`,
+`googleapis/release-please-action`, and `softprops/action-gh-release`.
 
 ## Testing
 
 `tests/` contains:
 
-- `make-fixture.swift` — generates the primary-color multi-page test PDF.
-- `run-integration-test.sh` — drives the engine and asserts page count, file
-  existence, per-page fill colors, and montage grid geometry + cell fills.
+- `make-fixture.swift` — generates a deterministic primary-color multi-page test
+  PDF (each page a solid red/green/blue/yellow/magenta fill).
+- `check-pixels.swift` — reads an image and reports a pixel's RGB.
+- `run-integration-test.sh` — drives the engine in both formats and asserts page
+  count, file existence, per-page fill colors, and montage grid geometry; then
+  runs each Quick Action wrapper headlessly to confirm none open a blocking
+  dialog.
 
-Wired into `ci.yml` on `macos-latest`.
+The integration test is wired into `ci.yml` on `macos-latest`.
 
-## File layout (after implementation)
+## Repository layout
 
-```
-pdf-to-images.swift
-version.txt
-release-please-config.json
-.release-please-manifest.json
-.github/
-  workflows/ci.yml
-  workflows/release.yml
-  workflows/cd.yml
-  dependabot.yml
-Convert PDF to JPG.workflow/        (engine bundled inside Contents/)
-Convert PDF to PNG.workflow/        (engine bundled inside Contents/)
-Convert PDF to JPG.shortcut         (built via shortcuts-playground)
-Convert PDF to PNG.shortcut         (built via shortcuts-playground)
-tests/
-  make-fixture.swift
-  run-integration-test.sh
-docs/superpowers/specs/2026-05-22-pdf-to-jpg-every-page-design.md
-README.md  LICENSE
+```text
+pdf-to-images.swift            engine — the single source of truth
+build-wrappers.sh              generates the four wrappers from the engine
+wrappers/                      dispatcher templates + generated shortcut bodies
+Convert PDF to {JPG,PNG}.workflow/   Automator Quick Actions (engine bundled in)
+Convert PDF to {JPG,PNG}.shortcut    Shortcuts Quick Actions (engine embedded)
+tests/                         fixture generator, pixel checker, integration test
+.github/workflows/             ci.yml, release.yml, cd.yml
+.github/                       dependabot.yml, issue + PR templates
+version.txt                    version string, bumped by release-please
+release-please-config.json     release-please configuration
+docs/DESIGN.md                 this document
+README.md  CONTRIBUTING.md  SECURITY.md  CODE_OF_CONDUCT.md  LICENSE
 ```

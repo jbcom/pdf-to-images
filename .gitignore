@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Build / test scratch
+dist/
+*.swiftmodule
+*.swiftdoc
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Agent workspace
+.claude/worktrees/
+.agent-state/digest.md
+.agent-state/cursor.md
+.agent-state/batch.json
+.agent-state/.indexed-sha
+.agent-state/.last-stop-sha
+.agent-state/.last-compaction
+
+# Agent process docs — kept locally as reference, not published.
+# The published architecture doc is docs/DESIGN.md.
+docs/superpowers/
