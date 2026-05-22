@@ -85,6 +85,16 @@ Per PDF argument:
 5. Print one summary line per PDF to stdout:
    `<name>.pdf → N page(s) in <name>_pages/ + montage`.
 
+**Color management.** Every render context and every fill color uses one
+explicit sRGB color space. Colors are created with
+`CGColor(colorSpace: srgb, components: …)`, *not* the convenience
+`CGColor(red:green:blue:alpha:)` initializer — the latter creates colors in a
+generic/extended-sRGB space, so filling them into an sRGB context triggers a
+color-space conversion that visibly shifts vivid colors (pure red rasterizes as
+`255,38,0`). Sharing one color space end-to-end keeps colors exact, which also
+makes the primary-color integration test deterministic. The test fixture
+generator follows the same rule.
+
 Format handling is a single encode-step branch: pages render to a shared
 `CGImage`; only the final `CGImageDestination` UTI differs (`public.jpeg` vs
 `public.png`). This keeps jpg/png a one-line difference, not a code fork.
