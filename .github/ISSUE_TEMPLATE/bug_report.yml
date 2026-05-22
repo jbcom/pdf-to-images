@@ -1,0 +1,50 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting. Please fill in the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what went wrong?
+      placeholder: Right-clicked a PDF, chose "Convert PDF to JPG", and …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: dropdown
+    id: wrapper
+    attributes:
+      label: Which wrapper
+      options:
+        - Convert PDF to JPG (Automator .workflow)
+        - Convert PDF to PNG (Automator .workflow)
+        - Convert PDF to JPG (Shortcut)
+        - Convert PDF to PNG (Shortcut)
+        - Ran pdf-to-images.swift directly
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 15.5
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: pdf-to-images release
+      placeholder: e.g. v1.0.0
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: A sample PDF that reproduces the issue is very helpful.
