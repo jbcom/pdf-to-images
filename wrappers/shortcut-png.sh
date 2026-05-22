@@ -6,13 +6,28 @@
 # sibling engine script. Instead the full engine source is embedded below and
 # written to a temp file at run time. Receives PDF file paths as positional
 # arguments from the Quick Action.
+#
+# Runs safely both interactively (Finder Quick Action) and non-interactively
+# (agents, CI, other scripts). It NEVER opens a blocking modal dialog: user
+# messaging goes through non-blocking notifications, and stderr always carries
+# the full text. Set PDF_TO_IMAGES_QUIET=1 to suppress notifications entirely.
 
 FORMAT="png"
 
+# notify <title> <message>
+# Always writes to stderr. Additionally posts a non-blocking macOS notification
+# unless PDF_TO_IMAGES_QUIET is set. Never blocks — no `display alert`.
+notify() {
+  print -r -- "$1: $2" >&2
+  [ -n "${PDF_TO_IMAGES_QUIET:-}" ] && return 0
+  osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1 || true
+}
+
 if ! /usr/bin/xcrun --find swift >/dev/null 2>&1; then
-  osascript -e 'display alert "Developer tools required" message "Click Install when macOS prompts, then run this action again."' >/dev/null 2>&1 || true
-  # Trigger the macOS "install developer tools" popup.
-  /usr/bin/swift --version >/dev/null 2>&1
+  notify "PDF to ${FORMAT:u}" "Xcode developer tools required. Run this action again after macOS finishes installing them."
+  # Trigger the macOS "install developer tools" popup — only when interactive.
+  # Headless callers (PDF_TO_IMAGES_QUIET set) must not spawn an install GUI.
+  [ -z "${PDF_TO_IMAGES_QUIET:-}" ] && /usr/bin/swift --version >/dev/null 2>&1
   exit 1
 fi
 
@@ -323,8 +338,8 @@ STATUS=$?
 OUTPUT="$(printf '%s\n' "$OUTPUT" | /usr/bin/grep -v 'CG_PDF_VERBOSE' || true)"
 
 if [ $STATUS -eq 0 ]; then
-  osascript -e "display notification \"$OUTPUT\" with title \"PDF to ${FORMAT:u}\"" >/dev/null 2>&1 || true
+  notify "PDF to ${FORMAT:u}" "$OUTPUT"
 else
-  osascript -e "display alert \"PDF to ${FORMAT:u} failed\" message \"$OUTPUT\"" >/dev/null 2>&1 || true
+  notify "PDF to ${FORMAT:u} failed" "$OUTPUT"
 fi
 exit $STATUS

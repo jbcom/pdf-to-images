@@ -33,22 +33,38 @@
 					<string>#!/bin/zsh
 # pdf-to-images wrapper dispatcher. jpg is substituted at build time.
 # Receives PDF file paths as positional arguments from the Quick Action.
+#
+# Runs safely both interactively (Finder Quick Action) and non-interactively
+# (agents, CI, other scripts). It NEVER opens a blocking modal dialog: user
+# messaging goes through non-blocking notifications, and stderr always carries
+# the full text. Set PDF_TO_IMAGES_QUIET=1 to suppress notifications entirely
+# (headless callers get pure stdout/stderr, zero GUI).
 
 FORMAT="jpg"
+
+# notify &lt;title&gt; &lt;message&gt;
+# Always writes to stderr. Additionally posts a non-blocking macOS notification
+# unless PDF_TO_IMAGES_QUIET is set. Never blocks — no `display alert`.
+notify() {
+  print -r -- "$1: $2" &gt;&amp;2
+  [ -n "${PDF_TO_IMAGES_QUIET:-}" ] &amp;&amp; return 0
+  osascript -e "display notification \"$2\" with title \"$1\"" &gt;/dev/null 2&gt;&amp;1 || true
+}
 
 # Locate the engine bundled next to this script.
 SCRIPT_DIR="${0:A:h}"
 ENGINE="$SCRIPT_DIR/pdf-to-images.swift"
 
 if ! /usr/bin/xcrun --find swift &gt;/dev/null 2&gt;&amp;1; then
-  osascript -e 'display alert "Developer tools required" message "Click Install when macOS prompts, then run this action again."' &gt;/dev/null 2&gt;&amp;1 || true
-  # Trigger the macOS "install developer tools" popup.
-  /usr/bin/swift --version &gt;/dev/null 2&gt;&amp;1
+  notify "PDF to ${FORMAT:u}" "Xcode developer tools required. Run this action again after macOS finishes installing them."
+  # Trigger the macOS "install developer tools" popup — only when interactive.
+  # Headless callers (PDF_TO_IMAGES_QUIET set) must not spawn an install GUI.
+  [ -z "${PDF_TO_IMAGES_QUIET:-}" ] &amp;&amp; /usr/bin/swift --version &gt;/dev/null 2&gt;&amp;1
   exit 1
 fi
 
 if [ ! -f "$ENGINE" ]; then
-  osascript -e 'display alert "pdf-to-images" message "Engine script not found next to the workflow."' &gt;/dev/null 2&gt;&amp;1 || true
+  notify "PDF to ${FORMAT:u}" "Engine script not found next to the workflow."
   exit 1
 fi
 
@@ -58,9 +74,9 @@ STATUS=$?
 OUTPUT="$(printf '%s\n' "$OUTPUT" | /usr/bin/grep -v 'CG_PDF_VERBOSE' || true)"
 
 if [ $STATUS -eq 0 ]; then
-  osascript -e "display notification \"$OUTPUT\" with title \"PDF to ${FORMAT:u}\"" &gt;/dev/null 2&gt;&amp;1 || true
+  notify "PDF to ${FORMAT:u}" "$OUTPUT"
 else
-  osascript -e "display alert \"PDF to ${FORMAT:u} failed\" message \"$OUTPUT\"" &gt;/dev/null 2&gt;&amp;1 || true
+  notify "PDF to ${FORMAT:u} failed" "$OUTPUT"
 fi
 exit $STATUS</string>
 					<key>CheckedForUserDefaultShell</key><true/>
